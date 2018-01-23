@@ -13,10 +13,37 @@ formula_file = sys.argv[1]
 
 formula = z3.parse_smt2_file(formula_file)
 
+# print(formula)
 
-def aproximate(formula):
-    number = 0
-    formula = formula.__rand__(number)
+
+def approximate(formula):
+    """Approximate given formula.
+        approximation_type:
+            0 ... set the rest of bits to 0
+            1 ... set the rest of bits to 1
+            2 ... set the rest of bits to the value of the sign bit
+    """
+
+    bit_places = 3
+    approximation_type = 0
+
+    if approximation_type == 0:
+        complement = BitVecVal(0, formula.size() - bit_places)
+
+    elif approximation_type == 1:
+        complement = BitVecVal(0, formula.size() - bit_places) - 1
+
+    elif approximation_type == 2:
+        sign_bit = Extract(bit_places - 1, bit_places - 1, formula)
+        complement = sign_bit
+        for _ in range(formula.size() - bit_places - 1):
+            complement = Concat(sign_bit, complement)
+
+    else:
+        print("Select 0, 1 or 2.")
+
+    formula = Concat(complement, (Extract(bit_places - 1, 0, formula)))
+
     return formula
 
 
@@ -42,7 +69,7 @@ def rec_go_q(formula, var_list):
         # Type Bool
         elif formula.var_sort(i).is_bool():
             q_vars.append(Bool(name))
-        else:            
+        else:
             print("Wrong type!")
             print(formula.var_sort(i))
 
@@ -59,19 +86,26 @@ def rec_go_f(formula, var_list):
     elif z3.is_var(formula):
         order = len(var_list) - z3.get_var_index(formula) - 1
         if type(formula) == BitVecRef:
-            formula = aproximate(formula)
+            formula = approximate(formula)
 
     # complex formula
     else:
         new_children = []
         for i in range(len(formula.children())):
             new_children.append(rec_go(formula.children()[i], var_list))
-        
+
         if formula.decl().name() == "and":
             formula = And(*new_children)
         elif formula.decl().name() == "or":
             formula = Or(*new_children)
+        elif formula.decl().name() == "bvadd":
+            formula = new_children[0]
+            for ch in new_children[1::]:
+                formula = formula & ch
+        # TODO
+        # elif formula.decl().name() == Distinct(), multiplication:
         else:
+            # print(formula.decl().name())
             formula = formula.decl().__call__(*new_children)
 
     return formula
