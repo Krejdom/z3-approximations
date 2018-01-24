@@ -87,7 +87,7 @@ def qform_process(formula, var_list, approx_type, q_type, bit_places):
                   approx_type,
                   q_type,
                   bit_places)
-    
+
     # Recreate the list of quantified variables
     q_vars = q_var_list(formula)
     
@@ -97,50 +97,66 @@ def qform_process(formula, var_list, approx_type, q_type, bit_places):
     return formula
 
 
+def complexform_process(formula, var_list, approx_type, q_type, bit_places):
+
+    # Recursively process children of formula
+    new_children = []
+    for i in range(len(formula.children())):
+        new_children.append(rec_go(formula.children()[i],
+                                   var_list,
+                                   approx_type,
+                                   q_type,
+                                   bit_places))
+
+    # Recreate trouble making operands with arity greater then 2
+    if formula.decl().name() == "and":
+        formula = And(*new_children)
+    elif formula.decl().name() == "or":
+        formula = Or(*new_children)
+    elif formula.decl().name() == "bvadd":
+        formula = new_children[0]
+        for ch in new_children[1::]:
+            formula = new_formula & ch
+    elif (formula.decl().name() == "bvmul") and (len(new_children) > 2):
+        raise ValueError("Fix needed (TODO: bvmul)")
+
+    # TODO: bvmul
+    # problems with Distinct() or multiplication may arrise
+    # print(formula.decl().name())
+
+    # Recreate problem-free operands
+    else:
+        formula = formula.decl().__call__(*new_children)
+
+    return formula
+
+
 def rec_go_f(formula, var_list, approx_type, q_type, bit_places):
-    # constant
+    # Constant
     if z3.is_const(formula):
         pass
 
-    # variables
+    # Variable
     elif z3.is_var(formula):
         order = len(var_list) - z3.get_var_index(formula) - 1
         
+        # Approximate if var is bit-vecotr and is quantified in the right way
         if (type(formula) == BitVecRef) and (var_list[order][1] == q_type):
+
+            # Update max bit-vector width
             global max_bit_width
             if max_bit_width < formula.size():
                 max_bit_width = formula.size()
-        
-            formula = approximate(formula,
-                                  var_list,
-                                  approx_type,
-                                  bit_places)
 
-    # complex formula
+            formula = approximate(formula, var_list, approx_type, bit_places)
+
+    # Complex formula
     else:
-        new_children = []
-        for i in range(len(formula.children())):
-            new_children.append(rec_go(formula.children()[i],
-                                       var_list,
-                                       approx_type,
-                                       q_type,
-                                       bit_places))
-
-        if formula.decl().name() == "and":
-            formula = And(*new_children)
-        elif formula.decl().name() == "or":
-            formula = Or(*new_children)
-        elif formula.decl().name() == "bvadd":
-            formula = new_children[0]
-            for ch in new_children[1::]:
-                formula = formula & ch
-        elif (formula.decl().name() == "bvmul") and (len(new_children) > 2):
-            print("Fix needed (TODO: bvmul)")
-        # TODO
-        # elif formula.decl().name() == Distinct(), multiplication:
-        else:
-            # print(formula.decl().name())
-            formula = formula.decl().__call__(*new_children)
+        formula = complexform_process(formula,
+                                      var_list,
+                                      approx_type,
+                                      q_type,
+                                      bit_places)
 
     return formula
 
