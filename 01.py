@@ -15,6 +15,15 @@ class Polarity(Enum):
     NEGATIVE = 1
 
 
+class ReductionType(Enum):
+    ZERO_EXTENSION = 0
+    ONE_EXTENSION = 1
+    SIGN_EXTENSION = 2
+    RIGHT_ZERO_EXTENSION = 3
+    RIGHT_ONE_EXTENSION = 4
+    RIGHT_SIGN_EXTENSION = 5
+
+
 max_bit_width = 1
 
 
@@ -27,26 +36,60 @@ def approximate(formula, var_list, approx_type, bit_places):
         approx_type approximation type (0, 1, 2)
         bit_places  new bit width
     """
-    # Zero-extension (set the rest of bits to 0)
-    if approx_type == 0:
+    # Zero-extension (set the rest of bits on the left to 0)
+    if approx_type == ReductionType.ZERO_EXTENSION:
         complement = BitVecVal(0, formula.size() - bit_places)
+        formula = Concat(complement, (Extract(bit_places - 1, 0, formula)))
 
-    # One-extension (set the rest of bits to 1)
-    elif approx_type == 1:
+    # One-extension (set the rest of bits on the left to 1)
+    elif approx_type == ReductionType.ONE_EXTENSION:
         complement = BitVecVal(0, formula.size() - bit_places) - 1
+        formula = Concat(complement, (Extract(bit_places - 1, 0, formula)))
 
-    # Sign-extension (set the rest of bits to the value of the sign bit)
-    elif approx_type == 2:
+    # Sign-extension
+    # (set the rest of bits on the left to the value of the sign bit)
+    elif approx_type == ReductionType.SIGN_EXTENSION:
         sign_bit = Extract(bit_places - 1, bit_places - 1, formula)
         complement = sign_bit
         for _ in range(formula.size() - bit_places - 1):
             complement = Concat(sign_bit, complement)
-    # TODO: right zero-extension, right one-extension, right sign-extension
+        formula = Concat(complement, (Extract(bit_places - 1, 0, formula)))
+
+    # Right-zero-extension (set the rest of bits on the right to 0)
+    elif approx_type == ReductionType.RIGHT_ZERO_EXTENSION:
+        complement = BitVecVal(0, formula.size() - bit_places)
+        formula = Concat(Extract(formula.size() - 1,
+                                 formula.size() - bit_places,
+                                 formula),
+                         complement)
+
+    # Right-one-extension (set the rest of bits on the right to 1)
+    elif approx_type == ReductionType.RIGHT_ONE_EXTENSION:
+        complement = BitVecVal(0, formula.size() - bit_places) - 1
+        formula = Concat(Extract(formula.size() - 1,
+                                 formula.size() - bit_places,
+                                 formula),
+                         complement)
+
+    # Right-sign-extension
+    # (set the rest of bits on the right to the value of the sign bit)
+    elif approx_type == ReductionType.RIGHT_SIGN_EXTENSION:
+        sign_bit_position = formula.size() - bit_places
+        sign_bit = Extract(sign_bit_position, sign_bit_position, formula)
+
+        complement = sign_bit
+        for _ in range(sign_bit_position - 1):
+            complement = Concat(sign_bit, complement)
+
+        formula = Concat(Extract(formula.size() - 1,
+                                 sign_bit_position,
+                                 formula),
+                         complement)
 
     # Unknown type of approximation
     else:
-        raise ValueError("Select approximation type (0, 1 or 2).")
-    formula = Concat(complement, (Extract(bit_places - 1, 0, formula)))
+        raise ValueError("Select approximation type.")
+
     return formula
 
 
@@ -247,7 +290,7 @@ def solve_with_approximations(formula, approx_type, q_type, bit_places, polarity
                 result = solve_without_approximations(formula)
         elif result == CheckSatResult(Z3_L_FALSE):
             print("Over-approximation of the formula is unsatisfiable.")
-            print("Formula is unsatisfiable. :)\n")
+            print("Formula is unsatisfiable. :)")
         else:
             print("The result is unknown.")
     else:
@@ -296,7 +339,7 @@ def main():
     # 0 ... zero-extension (set the rest of bits to 0)
     # 1 ... one-extension (set the rest of bits to 1)
     # 2 ... sign-extension (set the rest of bits to the value of the sign bit)
-    approx_type = 0
+    approx_type = ReductionType.RIGHT_SIGN_EXTENSION
 
     # Determine which variables (universaly or existentialy quantified) will be
     # approxamated.
@@ -334,7 +377,7 @@ def main():
     print()
 
     # Solve formula and use approximations
-    print("Solved with approximations: ", end="")
+    print("Solved with approximations: ")
     print(solve_with_approximations(formula,
                                     approx_type,
                                     q_type,
