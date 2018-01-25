@@ -24,7 +24,7 @@ def approximate(formula, var_list, approx_type, bit_places):
     # Zero-extension (set the rest of bits to 0)
     if approx_type == 0:
         complement = BitVecVal(0, formula.size() - bit_places)
-    
+
     # One-extension (set the rest of bits to 1)
     elif approx_type == 1:
         complement = BitVecVal(0, formula.size() - bit_places) - 1
@@ -36,13 +36,11 @@ def approximate(formula, var_list, approx_type, bit_places):
         for _ in range(formula.size() - bit_places - 1):
             complement = Concat(sign_bit, complement)
     # TODO: right zero-extension, right one-extension, right sign-extension
-    
+
     # Unknown type of approximation
     else:
         raise ValueError("Select approximation type (0, 1 or 2).")
-
     formula = Concat(complement, (Extract(bit_places - 1, 0, formula)))
-
     return formula
 
 
@@ -51,7 +49,7 @@ def q_var_list(formula):
 
     for i in range(formula.num_vars()):
         name = formula.var_name(i)
-        
+
         # Type BV
         if z3.is_bv_sort(formula.var_sort(i)):
             size = formula.var_sort(i).size()
@@ -60,7 +58,7 @@ def q_var_list(formula):
         # Type Bool
         elif formula.var_sort(i).is_bool():
             q_vars.append(Bool(name))
-        
+
         else:
             raise ValueError("Unknown type of variable:", formula.var_sort(i))
 
@@ -70,7 +68,7 @@ def q_var_list(formula):
 def qform_process(formula, var_list, approx_type, q_type, bit_places):
     """Create new quantified formula with modified body.
     """
-    
+
     # Identification of quantification type
     if formula.is_forall():
         quantification = Quantification.UNIVERSAL
@@ -90,10 +88,10 @@ def qform_process(formula, var_list, approx_type, q_type, bit_places):
 
     # Recreate the list of quantified variables
     q_vars = q_var_list(formula)
-    
+
     # Create new quantified formula with modified body
     formula = ForAll(q_vars, body)
-    
+
     return formula
 
 
@@ -116,7 +114,7 @@ def complexform_process(formula, var_list, approx_type, q_type, bit_places):
     elif formula.decl().name() == "bvadd":
         formula = new_children[0]
         for ch in new_children[1::]:
-            formula = new_formula & ch
+            formula = formula + ch
     elif (formula.decl().name() == "bvmul") and (len(new_children) > 2):
         raise ValueError("Fix needed (TODO: bvmul)")
 
@@ -139,7 +137,7 @@ def rec_go_f(formula, var_list, approx_type, q_type, bit_places):
     # Variable
     elif z3.is_var(formula):
         order = len(var_list) - z3.get_var_index(formula) - 1
-        
+
         # Approximate if var is bit-vecotr and is quantified in the right way
         if (type(formula) == BitVecRef) and (var_list[order][1] == q_type):
 
@@ -162,52 +160,58 @@ def rec_go_f(formula, var_list, approx_type, q_type, bit_places):
 
 
 def rec_go(formula, var_list, approx_type, q_type, bit_places):
+    """Recursively go through the formula and aply approximations.
+    """
+    # Handle the quantifiers
     if type(formula) == QuantifierRef:
         formula = qform_process(formula,
-                           var_list,
-                           approx_type,
-                           q_type,
-                           bit_places)
+                                var_list,
+                                approx_type,
+                                q_type,
+                                bit_places)
+
+    # Ordinary formula
     else:
         formula = rec_go_f(formula,
                            var_list,
                            approx_type,
                            q_type,
                            bit_places)
+
     return formula
 
 
-def solve_with_approximations(formula,
-                              approx_type,
-                              q_type,
-                              bit_places):
+def solve_with_approximations(formula, approx_type, q_type, bit_places):
     s = z3.Solver()
-    approximated_formula = rec_go(formula, 
+    approximated_formula = rec_go(formula,
                                   [],
                                   approx_type,
                                   q_type,
                                   bit_places)
+
     s.add(approximated_formula)
     result = s.check()
-    
+
     if q_type == Quantification.UNIVERSAL:
         if result == CheckSatResult(Z3_L_TRUE):
             print("Over-approximation of the formula is satisfiable.")
             print("Continue...")
-            print(bit_places, "<", (max_bit_width - 1))
+            print(bit_places, "<", (max_bit_width - 1)) # debug only
             if bit_places < (max_bit_width - 1):
-                solve_with_approximations(formula,
+                return solve_with_approximations(formula,
                                           approx_type,
                                           q_type,
                                           (bit_places + 2))
             else:
                 print("Cannot use approxamation. :(\n")
                 print("Continue with original formula...")
-                solve_without_approximations(formula)
+                return solve_without_approximations(formula)
         elif result == CheckSatResult(Z3_L_FALSE):
+            return result
             print("Over-approximation of the formula is unsatisfiable.")
             print("Formula is unsatisfiable.\n")
         else:
+            return result
             print("The result is unknown.")
     else:
         if result == CheckSatResult(Z3_L_TRUE):
@@ -227,7 +231,7 @@ def solve_with_approximations(formula,
                 print("Cannot use approxamation. :(\n")
                 print("Continue with original formula...")
                 solve_without_approximations(formula)
-                
+
         else:
             print("The result is unknown.")
 
@@ -235,7 +239,8 @@ def solve_with_approximations(formula,
 def solve_without_approximations(formula):
     s = z3.Solver()
     s.add(formula)
-    print("The result without approximations is:", s.check(), "\n")
+    # print("The result without approximations is:", s.check(), "\n")
+    return s.check()
 
 
 def main():
@@ -258,15 +263,39 @@ def main():
     # Quantification.EXISTENTIAL ... under-approximation
     q_type = Quantification.UNIVERSAL
 
+    """
+    args = sys.argv[1:]
+    for formula_file in args:
+        formula = z3.parse_smt2_file(formula_file)
+        #print(formula)
+
+        # Solve original formula (debug only)
+        solve_original = solve_without_approximations(formula)
+
+        # Solve formula and use approximations
+        solve_approximated = solve_with_approximations(formula,
+                                                       approx_type,
+                                                       q_type,
+                                                       bit_places=1)
+        print(solve_approximated)
+
+        if solve_approximated == solve_original:
+            print("OK")
+        else:
+            print("NOK", formula_file)
+            break
+    """
+
     # Solve original formula (debug only)
-    solve_without_approximations(formula)
+    print("Solved without approximations: ", end="")
+    print(solve_without_approximations(formula))
 
     # Solve formula and use approximations
-    solve_with_approximations(formula,
-                              approx_type,
-                              q_type,
-                              bit_places=1)
-
+    print("Solved with approximations: ", end="")
+    print(solve_with_approximations(formula,
+                                    approx_type,
+                                    q_type,
+                                    bit_places=1))
 
 if __name__ == "__main__":
     main()
