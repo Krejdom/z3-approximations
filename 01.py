@@ -6,8 +6,8 @@ from z3 import *
 
 
 class Quantification(Enum):
-    UNIVERSAL = 0
-    EXISTENTIAL = 1
+    UNIVERSAL = 0       # over-approximation
+    EXISTENTIAL = 1     # under-approximation
 
 
 class Polarity(Enum):
@@ -27,70 +27,116 @@ class ReductionType(Enum):
 max_bit_width = 1
 
 
-def approximate(formula, var_list, approx_type, bit_places):
+def zero_extension(formula, bit_places):
+    """Set the rest of bits on the left to 0.
+    """
+    complement = BitVecVal(0, formula.size() - bit_places)
+    formula = Concat(complement, (Extract(bit_places - 1, 0, formula)))
+
+    return formula
+
+
+def one_extension(formula, bit_places):
+    """Set the rest of bits on the left to 1.
+    """
+    complement = BitVecVal(0, formula.size() - bit_places) - 1
+    formula = Concat(complement, (Extract(bit_places - 1, 0, formula)))
+
+    return formula
+
+
+def sign_extension(formula, bit_places):
+    """Set the rest of bits on the left to the value of the sign bit.
+    """
+    sign_bit = Extract(bit_places - 1, bit_places - 1, formula)
+
+    complement = sign_bit
+    for _ in range(formula.size() - bit_places - 1):
+        complement = Concat(sign_bit, complement)
+
+    formula = Concat(complement, (Extract(bit_places - 1, 0, formula)))
+
+    return formula
+
+
+def right_zero_extension(formula, bit_places):
+    """Set the rest of bits on the right to 0.
+    """
+    complement = BitVecVal(0, formula.size() - bit_places)
+    formula = Concat(Extract(formula.size() - 1,
+                             formula.size() - bit_places,
+                             formula),
+                     complement)
+
+    return formula
+
+
+def right_one_extension(formula, bit_places):
+    """Set the rest of bits on the right to 1.
+    """
+    complement = BitVecVal(0, formula.size() - bit_places) - 1
+    formula = Concat(Extract(formula.size() - 1,
+                             formula.size() - bit_places,
+                             formula),
+                     complement)
+
+    return formula
+
+
+def right_sign_extension(formula, bit_places):
+    """Set the rest of bits on the right to the value of the sign bit.
+    """
+    sign_bit_position = formula.size() - bit_places
+    sign_bit = Extract(sign_bit_position, sign_bit_position, formula)
+
+    complement = sign_bit
+    for _ in range(sign_bit_position - 1):
+        complement = Concat(sign_bit, complement)
+
+    formula = Concat(Extract(formula.size() - 1,
+                             sign_bit_position,
+                             formula),
+                     complement)
+
+    return formula
+
+
+def approximate(formula, approx_type, bit_places):
     """Approximate given formula.
 
     Arguments:
         formula     formula to approximate
-        var_list    list of quantified variables
         approx_type approximation type (0, 1, 2)
         bit_places  new bit width
     """
-    # Zero-extension (set the rest of bits on the left to 0)
-    if approx_type == ReductionType.ZERO_EXTENSION:
-        complement = BitVecVal(0, formula.size() - bit_places)
-        formula = Concat(complement, (Extract(bit_places - 1, 0, formula)))
 
-    # One-extension (set the rest of bits on the left to 1)
+    # Zero-extension
+    if approx_type == ReductionType.ZERO_EXTENSION:
+        return zero_extension(formula, bit_places)
+
+    # One-extension
     elif approx_type == ReductionType.ONE_EXTENSION:
-        complement = BitVecVal(0, formula.size() - bit_places) - 1
-        formula = Concat(complement, (Extract(bit_places - 1, 0, formula)))
+        return one_extension(formula, bit_places)
 
     # Sign-extension
-    # (set the rest of bits on the left to the value of the sign bit)
     elif approx_type == ReductionType.SIGN_EXTENSION:
-        sign_bit = Extract(bit_places - 1, bit_places - 1, formula)
-        complement = sign_bit
-        for _ in range(formula.size() - bit_places - 1):
-            complement = Concat(sign_bit, complement)
-        formula = Concat(complement, (Extract(bit_places - 1, 0, formula)))
+        return sign_extension(formula, bit_places)
 
-    # Right-zero-extension (set the rest of bits on the right to 0)
+    # Right-zero-extension
     elif approx_type == ReductionType.RIGHT_ZERO_EXTENSION:
-        complement = BitVecVal(0, formula.size() - bit_places)
-        formula = Concat(Extract(formula.size() - 1,
-                                 formula.size() - bit_places,
-                                 formula),
-                         complement)
+        return right_zero_extension(formula, bit_places)
 
-    # Right-one-extension (set the rest of bits on the right to 1)
+    # Right-one-extension
     elif approx_type == ReductionType.RIGHT_ONE_EXTENSION:
-        complement = BitVecVal(0, formula.size() - bit_places) - 1
-        formula = Concat(Extract(formula.size() - 1,
-                                 formula.size() - bit_places,
-                                 formula),
-                         complement)
+        return right_one_extension(formula, bit_places)
 
     # Right-sign-extension
-    # (set the rest of bits on the right to the value of the sign bit)
     elif approx_type == ReductionType.RIGHT_SIGN_EXTENSION:
-        sign_bit_position = formula.size() - bit_places
-        sign_bit = Extract(sign_bit_position, sign_bit_position, formula)
-
-        complement = sign_bit
-        for _ in range(sign_bit_position - 1):
-            complement = Concat(sign_bit, complement)
-
-        formula = Concat(Extract(formula.size() - 1,
-                                 sign_bit_position,
-                                 formula),
-                         complement)
+        return right_sign_extension(formula, bit_places)
 
     # Unknown type of approximation
     else:
         raise ValueError("Select approximation type.")
-
-    return formula
 
 
 def q_var_list(formula):
@@ -222,9 +268,7 @@ def rec_go_f(formula, var_list, approx_type, q_type, bit_places, polarity):
             global max_bit_width
             if max_bit_width < formula.size():
                 max_bit_width = formula.size()
-
-            formula = approximate(formula, var_list, approx_type, bit_places)
-
+            formula = approximate(formula, approx_type, bit_places)
     # Complex formula
     else:
         formula = complexform_process(formula,
@@ -278,12 +322,12 @@ def solve_with_approximations(formula, approx_type, q_type, bit_places, polarity
             print("Over-approximation of the formula is satisfiable.")
             if bit_places < (max_bit_width - 1):
                 print("Continue with bit-vecotr width", bit_places,
-                  "(max "+ str(max_bit_width - 1) + ")") # debug only
+                      "(max " + str(max_bit_width - 1) + ")") # debug only
                 result = solve_with_approximations(formula,
-                                          approx_type,
-                                          q_type,
-                                          (bit_places + 2),
-                                          polarity)
+                                                   approx_type,
+                                                   q_type,
+                                                   (bit_places + 2),
+                                                   polarity)
             else:
                 print("Cannot use approxamation. :(\n")
                 print("Continue with original formula...")
@@ -303,7 +347,7 @@ def solve_with_approximations(formula, approx_type, q_type, bit_places, polarity
             print("Under-approximation of the formula is unsatisfiable.")
             if bit_places < (max_bit_width - 1):
                 print("Continue with bit-vecotr width", bit_places,
-                  "(max "+ str(max_bit_width - 1) + ")") # debug only
+                      "(max " + str(max_bit_width - 1) + ")")   # debug only
                 solve_with_approximations(formula,
                                           approx_type,
                                           q_type,
@@ -336,15 +380,10 @@ def main():
     formula = z3.parse_smt2_file(formula_file)
 
     # Determine the type of approximation.
-    # 0 ... zero-extension (set the rest of bits to 0)
-    # 1 ... one-extension (set the rest of bits to 1)
-    # 2 ... sign-extension (set the rest of bits to the value of the sign bit)
     approx_type = ReductionType.RIGHT_SIGN_EXTENSION
 
     # Determine which variables (universaly or existentialy quantified) will be
     # approxamated.
-    # Quantification.UNIVERSAL ... over-approximation
-    # Quantification.EXISTENTIAL ... under-approximation
     q_type = Quantification.UNIVERSAL
 
     """
