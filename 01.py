@@ -9,6 +9,12 @@ class Quantification(Enum):
     UNIVERSAL = 0
     EXISTENTIAL = 1
 
+
+class Polarity(Enum):
+    POSITIVE = 0
+    NEGATIVE = 1
+
+
 max_bit_width = 1
 
 
@@ -65,12 +71,13 @@ def q_var_list(formula):
     return q_vars
 
 
-def qform_process(formula, var_list, approx_type, q_type, bit_places):
+def qform_process(formula, var_list, approx_type, q_type, bit_places, polarity):
     """Create new quantified formula with modified body.
     """
 
     # Identification of quantification type
-    if formula.is_forall():
+    if ((formula.is_forall() and (polarity == Polarity.POSITIVE)) or
+       ((not formula.is_forall()) and (polarity == Polarity.NEGATIVE))):
         quantification = Quantification.UNIVERSAL
     else:
         quantification = Quantification.EXISTENTIAL
@@ -84,7 +91,8 @@ def qform_process(formula, var_list, approx_type, q_type, bit_places):
                   var_list,
                   approx_type,
                   q_type,
-                  bit_places)
+                  bit_places,
+                  polarity)
 
     # Recreate the list of quantified variables
     q_vars = q_var_list(formula)
@@ -95,26 +103,52 @@ def qform_process(formula, var_list, approx_type, q_type, bit_places):
     return formula
 
 
-def complexform_process(formula, var_list, approx_type, q_type, bit_places):
+def complexform_process(formula, var_list, approx_type, q_type, bit_places, polarity):
+    new_children = []
+
+    # Process implication with polarity switching
+    if formula.decl().name() == "=>":
+        # Switch polarity for the left part of implication
+        if polarity == Polarity.POSITIVE:
+            polarity2 = Polarity.NEGATIVE
+        else:
+            polarity2 = Polarity.POSITIVE
+
+        new_children.append(rec_go(formula.children()[i],
+                                   var_list,
+                                   approx_type,
+                                   q_type,
+                                   bit_places,
+                                   polarity2))
+        new_children.append(rec_go(formula.children()[i],
+                                   var_list,
+                                   approx_type,
+                                   q_type,
+                                   bit_places,
+                                   polarity))
+        return Implies(*new_children)
 
     # Recursively process children of formula
-    new_children = []
     for i in range(len(formula.children())):
         new_children.append(rec_go(formula.children()[i],
                                    var_list,
                                    approx_type,
                                    q_type,
-                                   bit_places))
+                                   bit_places,
+                                   polarity))
 
     # Recreate trouble making operands with arity greater then 2
     if formula.decl().name() == "and":
         formula = And(*new_children)
+
     elif formula.decl().name() == "or":
         formula = Or(*new_children)
+
     elif formula.decl().name() == "bvadd":
         formula = new_children[0]
         for ch in new_children[1::]:
             formula = formula + ch
+
     elif (formula.decl().name() == "bvmul") and (len(new_children) > 2):
         raise ValueError("Fix needed (TODO: bvmul)")
 
@@ -129,7 +163,7 @@ def complexform_process(formula, var_list, approx_type, q_type, bit_places):
     return formula
 
 
-def rec_go_f(formula, var_list, approx_type, q_type, bit_places):
+def rec_go_f(formula, var_list, approx_type, q_type, bit_places, polarity):
     # Constant
     if z3.is_const(formula):
         pass
@@ -154,12 +188,13 @@ def rec_go_f(formula, var_list, approx_type, q_type, bit_places):
                                       var_list,
                                       approx_type,
                                       q_type,
-                                      bit_places)
+                                      bit_places,
+                                      polarity)
 
     return formula
 
 
-def rec_go(formula, var_list, approx_type, q_type, bit_places):
+def rec_go(formula, var_list, approx_type, q_type, bit_places, polarity):
     """Recursively go through the formula and aply approximations.
     """
     # Handle the quantifiers
@@ -168,7 +203,8 @@ def rec_go(formula, var_list, approx_type, q_type, bit_places):
                                 var_list,
                                 approx_type,
                                 q_type,
-                                bit_places)
+                                bit_places,
+                                polarity)
 
     # Ordinary formula
     else:
@@ -176,18 +212,20 @@ def rec_go(formula, var_list, approx_type, q_type, bit_places):
                            var_list,
                            approx_type,
                            q_type,
-                           bit_places)
+                           bit_places,
+                           polarity)
 
     return formula
 
 
-def solve_with_approximations(formula, approx_type, q_type, bit_places):
+def solve_with_approximations(formula, approx_type, q_type, bit_places, polarity):
     s = z3.Solver()
     approximated_formula = rec_go(formula,
                                   [],
                                   approx_type,
                                   q_type,
-                                  bit_places)
+                                  bit_places,
+                                  polarity)
 
     s.add(approximated_formula)
     result = s.check()
@@ -195,45 +233,48 @@ def solve_with_approximations(formula, approx_type, q_type, bit_places):
     if q_type == Quantification.UNIVERSAL:
         if result == CheckSatResult(Z3_L_TRUE):
             print("Over-approximation of the formula is satisfiable.")
-            print("Continue...")
-            print(bit_places, "<", (max_bit_width - 1)) # debug only
             if bit_places < (max_bit_width - 1):
-                return solve_with_approximations(formula,
+                print("Continue with bit-vecotr width", bit_places,
+                  "(max "+ str(max_bit_width - 1) + ")") # debug only
+                result = solve_with_approximations(formula,
                                           approx_type,
                                           q_type,
-                                          (bit_places + 2))
+                                          (bit_places + 2),
+                                          polarity)
             else:
                 print("Cannot use approxamation. :(\n")
                 print("Continue with original formula...")
-                return solve_without_approximations(formula)
+                result = solve_without_approximations(formula)
         elif result == CheckSatResult(Z3_L_FALSE):
-            return result
             print("Over-approximation of the formula is unsatisfiable.")
-            print("Formula is unsatisfiable.\n")
+            print("Formula is unsatisfiable. :)\n")
         else:
-            return result
             print("The result is unknown.")
     else:
         if result == CheckSatResult(Z3_L_TRUE):
             print("Under-approximation of the formula is satisfiable.")
-            print("Formula is satisfiable.\n")
+            print("Formula is satisfiable. :)\n")
             print("The model follows:\n")
             z3.solve(formula)
         elif result == CheckSatResult(Z3_L_FALSE):
             print("Under-approximation of the formula is unsatisfiable.")
-            print("Continue...")
             if bit_places < (max_bit_width - 1):
+                print("Continue with bit-vecotr width", bit_places,
+                  "(max "+ str(max_bit_width - 1) + ")") # debug only
                 solve_with_approximations(formula,
                                           approx_type,
                                           q_type,
-                                          (bit_places + 2))
+                                          (bit_places + 2),
+                                          polarity)
             else:
                 print("Cannot use approxamation. :(\n")
                 print("Continue with original formula...")
-                solve_without_approximations(formula)
+                result = solve_without_approximations(formula)
 
         else:
             print("The result is unknown.")
+
+    return result
 
 
 def solve_without_approximations(formula):
@@ -276,7 +317,8 @@ def main():
         solve_approximated = solve_with_approximations(formula,
                                                        approx_type,
                                                        q_type,
-                                                       bit_places=1)
+                                                       bit_places=1,
+                                                       polarity)
         print(solve_approximated)
 
         if solve_approximated == solve_original:
@@ -289,13 +331,15 @@ def main():
     # Solve original formula (debug only)
     print("Solved without approximations: ", end="")
     print(solve_without_approximations(formula))
+    print()
 
     # Solve formula and use approximations
     print("Solved with approximations: ", end="")
     print(solve_with_approximations(formula,
                                     approx_type,
                                     q_type,
-                                    bit_places=1))
+                                    bit_places=1,
+                                    polarity=Polarity.POSITIVE))
 
 if __name__ == "__main__":
     main()
