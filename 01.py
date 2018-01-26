@@ -209,14 +209,13 @@ def complexform_process(formula, var_list, approx_type,
             polarity2 = Polarity.NEGATIVE
         else:
             polarity2 = Polarity.POSITIVE
-
-        new_children.append(rec_go(formula.children()[i],
+        new_children.append(rec_go(formula.children()[0],
                                    var_list,
                                    approx_type,
                                    q_type,
                                    bit_places,
                                    polarity2))
-        new_children.append(rec_go(formula.children()[i],
+        new_children.append(rec_go(formula.children()[1],
                                    var_list,
                                    approx_type,
                                    q_type,
