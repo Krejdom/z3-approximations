@@ -7,8 +7,10 @@ from enum import Enum
 from z3 import *
 
 
-
 class Quantification(Enum):
+    """Determine which variables (universaly or existentialy quantified)
+    will be approxamated.
+    """
     UNIVERSAL = 0       # over-approximation
     EXISTENTIAL = 1     # under-approximation
 
@@ -19,12 +21,12 @@ class Polarity(Enum):
 
 
 class ReductionType(Enum):
-    ZERO_EXTENSION = 0
+    ZERO_EXTENSION = 3
     ONE_EXTENSION = 1
     SIGN_EXTENSION = 2
-    RIGHT_ZERO_EXTENSION = 3
-    RIGHT_ONE_EXTENSION = 4
-    RIGHT_SIGN_EXTENSION = 5
+    RIGHT_ZERO_EXTENSION = -3
+    RIGHT_ONE_EXTENSION = -1
+    RIGHT_SIGN_EXTENSION = -2
 
 
 max_bit_width = 1
@@ -163,7 +165,8 @@ def q_var_list(formula):
     return q_vars
 
 
-def qform_process(formula, var_list, approx_type, q_type, bit_places, polarity):
+def qform_process(formula, var_list, approx_type,
+                  q_type, bit_places, polarity):
     """Create new quantified formula with modified body.
     """
 
@@ -195,7 +198,8 @@ def qform_process(formula, var_list, approx_type, q_type, bit_places, polarity):
     return formula
 
 
-def complexform_process(formula, var_list, approx_type, q_type, bit_places, polarity):
+def complexform_process(formula, var_list, approx_type,
+                        q_type, bit_places, polarity):
     new_children = []
 
     # Process implication with polarity switching
@@ -308,7 +312,35 @@ def rec_go(formula, var_list, approx_type, q_type, bit_places, polarity):
     return formula
 
 
-def solve_with_approximations(formula, approx_type, q_type, bit_places, polarity, return_dict):
+def continue_with_approximation(formula, approx_type, q_type, bit_places,
+                                polarity, result_queue):
+    if bit_places < (max_bit_width - 2):
+        # Swith left/right approximation
+        if approx_type.value > 0:
+            approx_type = ReductionType(- approx_type.value)
+        else:
+            approx_type = ReductionType(- approx_type.value)
+
+            # Resize bit width
+            if bit_places == 1:
+                bit_places += 1
+            else:
+                bit_places += 2
+
+        return solve_with_approximations(formula,
+                                         approx_type,
+                                         q_type,
+                                         bit_places,
+                                         polarity,
+                                         result_queue)
+    else:
+        # print("Cannot use approxamation. :(\n")
+        # print("Continue with original formula...")
+        return solve_without_approximations(formula, result_queue)
+
+
+def solve_with_approximations(formula, approx_type, q_type,
+                              bit_places, polarity, result_queue):
     s = z3.Solver()
     approximated_formula = rec_go(formula,
                                   [],
@@ -323,21 +355,9 @@ def solve_with_approximations(formula, approx_type, q_type, bit_places, polarity
     if q_type == Quantification.UNIVERSAL:
         if result == CheckSatResult(Z3_L_TRUE):
             # print("Over-approximation of the formula is satisfiable.")
-            if bit_places < (max_bit_width - 1):
-                # print("Continue with bit-vecotr width", bit_places,
-                #       "(max " + str(max_bit_width - 1) + ")") # debug only
-                result = solve_with_approximations(formula,
-                                                   approx_type,
-                                                   q_type,
-                                                   (bit_places + 2),
-                                                   polarity,
-                                                   return_dict)
-            else:
-                # print("Cannot use approxamation. :(\n")
-                # print("Continue with original formula...")
-                s = z3.Solver()
-                s.add(formula)
-                result = s.check()
+            result = continue_with_approximation(formula, approx_type, q_type,
+                                                 bit_places, polarity,
+                                                 result_queue)
         elif result == CheckSatResult(Z3_L_FALSE):
             pass
             # print("Over-approximation of the formula is unsatisfiable.")
@@ -348,129 +368,120 @@ def solve_with_approximations(formula, approx_type, q_type, bit_places, polarity
 
     else:
         if result == CheckSatResult(Z3_L_TRUE):
+            pass
             # print("Under-approximation of the formula is satisfiable.")
             # print("Formula is satisfiable. :)\n")
             # print("The model follows:\n")
-            z3.solve(formula)
+            # z3.solve(formula)
         elif result == CheckSatResult(Z3_L_FALSE):
             # print("Under-approximation of the formula is unsatisfiable.")
-            if bit_places < (max_bit_width - 1):
-                # print("Continue with bit-vecotr width", bit_places,
-                #       "(max " + str(max_bit_width - 1) + ")")   # debug only
-                solve_with_approximations(formula,
-                                          approx_type,
-                                          q_type,
-                                          (bit_places + 2),
-                                          polarity,
-                                          return_dict)
-            else:
-                # print("Cannot use approxamation. :(\n")
-                # print("Continue with original formula...")
-                s = z3.Solver()
-                s.add(formula)
-                result = s.check()
-
+            result = continue_with_approximation(formula, approx_type, q_type,
+                                                 bit_places, polarity,
+                                                 result_queue)
         else:
             pass
             # print("The result is unknown.")
 
-    return_dict[1] = result
+    result_queue.put(result)
     return result
 
 
-def solve_without_approximations(formula, return_dict):
+def solve_without_approximations(formula, result_queue):
     s = z3.Solver()
     s.add(formula)
     # print("The result without approximations is:", s.check(), "\n")
-    return_dict[0] = s.check()
+    result_queue.put(s.check())
     return s.check()
-    
+
+
+def run_paralell(formula, approx_type, final_result_queue):
+    result_queue = multiprocessing.Queue()
+
+    p1 = multiprocessing.Process(target=solve_with_approximations,
+                                 args=(formula,
+                                       approx_type,
+                                       Quantification.UNIVERSAL,
+                                       1,
+                                       Polarity.POSITIVE,
+                                       result_queue))
+
+    p2 = multiprocessing.Process(target=solve_with_approximations,
+                                 args=(formula,
+                                       approx_type,
+                                       Quantification.EXISTENTIAL,
+                                       1,
+                                       Polarity.POSITIVE,
+                                       result_queue))
+    p1.start()
+    p2.start()
+
+    result = result_queue.get()
+
+    p1.terminate()
+    p2.terminate()
+
+    final_result_queue.put(result)
 
 
 def main():
     # Load the file with formula.
     # example: "../BV_benchmarky/2017-Preiner/psyco/001.smt2"
-    #formula_file = sys.argv[1]
-
-    # Parse SMT2 file.
-    #formula = z3.parse_smt2_file(formula_file)
+    # formula_file = sys.argv[1]
 
     # Determine the type of approximation.
-    approx_type = ReductionType.RIGHT_SIGN_EXTENSION
+    approx_type = ReductionType.ONE_EXTENSION
 
-    # Determine which variables (universaly or existentialy quantified) will be
-    # approxamated.
-    q_type = Quantification.UNIVERSAL
-
-    
     args = sys.argv[1:]
     for i in range(len(args)):
         formula_file = sys.argv[i+1]
         formula = z3.parse_smt2_file(formula_file)
-        
-        with multiprocessing.Manager() as manager:
-            return_dict = manager.dict()
 
-            p1 = multiprocessing.Process(target=solve_without_approximations,
-                                    args=(formula, return_dict))
-            p1.start()
+        with multiprocessing.Manager() as manager:
+            result_queue = multiprocessing.Queue()
+            # return_dict = manager.dict() #OLD DELETE
+
+            # ORIGINAL FORMULA
+            p = multiprocessing.Process(target=solve_without_approximations,
+                                        args=(formula, result_queue))
+            p.start()
             # Wait for 10 seconds or until process finishes
-            p1.join(10)
+            p.join(60)
 
             # If thread is still active
-            if p1.is_alive():
+            if p.is_alive():
                 print("TIME-OUT1", formula_file)
-                p1.terminate()
-                p1.join()
-                
+                p.terminate()
+                p.join()
                 continue
 
-            solve_original = return_dict[0]
-            #print(solve_original)
+            solve_original = result_queue.get()
 
-
-            p2 = multiprocessing.Process(target=solve_with_approximations,
+            # APPROXIMATED FORMULA
+            p0 = multiprocessing.Process(target=run_paralell,
                                          args=(formula,
                                                approx_type,
-                                               q_type,
-                                               1,
-                                               Polarity.POSITIVE,
-                                               return_dict))
-            p2.start()
+                                               result_queue))
+            p0.start()
             # Wait for 10 seconds or until process finishes
-            p2.join(10)
+            p0.join(60)
 
             # If thread is still active
-            if p2.is_alive():
+            if p0.is_alive():
                 print("TIME-OUT2", formula_file)
-                p2.terminate()
-                p2.join()
+                p0.terminate()
+                p0.join()
                 continue
 
-            solve_approximated = return_dict[1]
-            #print(solve_approximated)
+            solve_approximated = result_queue.get()
 
+            # Compare original and approximation result
             if solve_original == solve_approximated:
                 print("OK       ", formula_file)
             else:
                 print("NOK      ", formula_file)
                 print(solve_original, solve_approximated)
                 break
-    
-    """
-    # Solve original formula (debug only)
-    print("Solved without approximations: ", end="")
-    print(solve_without_approximations(formula))
-    print()
 
-    # Solve formula and use approximations
-    print("Solved with approximations: ")
-    print(solve_with_approximations(formula,
-                                    approx_type,
-                                    q_type,
-                                    bit_places=1,
-                                    polarity=Polarity.POSITIVE))
-    """
 if __name__ == "__main__":
     main()
 
