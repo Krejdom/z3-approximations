@@ -193,7 +193,10 @@ def qform_process(formula, var_list, approx_type,
     q_vars = q_var_list(formula)
 
     # Create new quantified formula with modified body
-    formula = ForAll(q_vars, body)
+    if formula.is_forall():
+        formula = ForAll(q_vars, body)
+    else:
+        formula = Exists(q_vars, body)
 
     return formula
 
@@ -352,34 +355,33 @@ def solve_with_approximations(formula, approx_type, q_type,
     result = s.check()
 
     if q_type == Quantification.UNIVERSAL:
+        # Over-approximation of the formula is SAT. Approximation continues.
         if result == CheckSatResult(Z3_L_TRUE):
-            # print("Over-approximation of the formula is satisfiable.")
             result = continue_with_approximation(formula, approx_type, q_type,
                                                  bit_places, polarity,
                                                  result_queue)
+        # Over-approximation of the formula is UNSAT. Original formula is UNSAT.
         elif result == CheckSatResult(Z3_L_FALSE):
             pass
-            # print("Over-approximation of the formula is unsatisfiable.")
-            # print("Formula is unsatisfiable. :)")
+        # The result is unknown.
         else:
             pass
-            # print("The result is unknown.")
 
     else:
+        # Under-approximation of the formula is SAT. Original formula is SAT.
         if result == CheckSatResult(Z3_L_TRUE):
             pass
-            # print("Under-approximation of the formula is satisfiable.")
-            # print("Formula is satisfiable. :)\n")
-            # print("The model follows:\n")
-            # z3.solve(formula)
+            # print("U: The model follows:")    # DEBUG
+            z3.solve(approximated_formula)                 # DEBUG
+            print(approximated_formula)
+        # Under-approximation of the formula is UNSAT. Approximation continues.
         elif result == CheckSatResult(Z3_L_FALSE):
-            # print("Under-approximation of the formula is unsatisfiable.")
             result = continue_with_approximation(formula, approx_type, q_type,
                                                  bit_places, polarity,
                                                  result_queue)
+        # The result is unknown.
         else:
             pass
-            # print("The result is unknown.")
 
     result_queue.put(result)
     return result
@@ -478,7 +480,8 @@ def main():
                 print("OK       ", formula_file)
             else:
                 print("NOK      ", formula_file)
-                print(solve_original, solve_approximated)
+                print("original:", solve_original)
+                print("approximated:", solve_approximated)
                 break
 
 if __name__ == "__main__":
