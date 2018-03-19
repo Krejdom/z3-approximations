@@ -169,7 +169,6 @@ def qform_process(formula, var_list, approx_type,
                   q_type, bit_places, polarity):
     """Create new quantified formula with modified body.
     """
-
     # Identification of quantification type
     if ((formula.is_forall() and (polarity == Polarity.POSITIVE)) or
        ((not formula.is_forall()) and (polarity == Polarity.NEGATIVE))):
@@ -182,8 +181,9 @@ def qform_process(formula, var_list, approx_type,
         var_list.append((formula.var_name(i), quantification))
 
     # Recursively process the body of the formula
+    var_list_copy = list(var_list)
     body = rec_go(formula.body(),
-                  var_list,
+                  var_list_copy,
                   approx_type,
                   q_type,
                   bit_places,
@@ -204,22 +204,31 @@ def qform_process(formula, var_list, approx_type,
 def complexform_process(formula, var_list, approx_type,
                         q_type, bit_places, polarity):
     new_children = []
+    var_list_copy = list(var_list)
 
+    # Switch polarity when negation
+    if formula.decl().name() == "not":
+        if polarity == Polarity.POSITIVE:
+            polarity = Polarity.NEGATIVE
+        else:
+            polarity = Polarity.POSITIVE
+        pass
     # Process implication with polarity switching
-    if formula.decl().name() == "=>":
-        # Switch polarity for the left part of implication
+    elif formula.decl().name() == "=>":
+        # Switch polarity just for the left part of implication
         if polarity == Polarity.POSITIVE:
             polarity2 = Polarity.NEGATIVE
         else:
             polarity2 = Polarity.POSITIVE
+
         new_children.append(rec_go(formula.children()[0],
-                                   var_list,
+                                   var_list_copy,
                                    approx_type,
                                    q_type,
                                    bit_places,
                                    polarity2))
         new_children.append(rec_go(formula.children()[1],
-                                   var_list,
+                                   var_list_copy,
                                    approx_type,
                                    q_type,
                                    bit_places,
@@ -229,7 +238,7 @@ def complexform_process(formula, var_list, approx_type,
     # Recursively process children of formula
     for i in range(len(formula.children())):
         new_children.append(rec_go(formula.children()[i],
-                                   var_list,
+                                   var_list_copy,
                                    approx_type,
                                    q_type,
                                    bit_places,
@@ -268,11 +277,11 @@ def rec_go_f(formula, var_list, approx_type, q_type, bit_places, polarity):
 
     # Variable
     elif z3.is_var(formula):
-        order = len(var_list) - z3.get_var_index(formula) - 1
+        # order = len(var_list) - z3.get_var_index(formula) - 1     #orginal
+        order = - z3.get_var_index(formula) - 1   #debug
 
         # Approximate if var is bit-vecotr and is quantified in the right way
         if (type(formula) == BitVecRef) and (var_list[order][1] == q_type):
-
             # Update max bit-vector width
             global max_bit_width
             if max_bit_width < formula.size():
@@ -280,23 +289,25 @@ def rec_go_f(formula, var_list, approx_type, q_type, bit_places, polarity):
             formula = approximate(formula, approx_type, bit_places)
     # Complex formula
     else:
+        var_list_copy = list(var_list)
         formula = complexform_process(formula,
-                                      var_list,
+                                      var_list_copy,
                                       approx_type,
                                       q_type,
                                       bit_places,
                                       polarity)
-
     return formula
 
 
 def rec_go(formula, var_list, approx_type, q_type, bit_places, polarity):
     """Recursively go through the formula and aply approximations.
     """
+    var_list_copy = list(var_list)
+
     # Handle the quantifiers
     if type(formula) == QuantifierRef:
         formula = qform_process(formula,
-                                var_list,
+                                var_list_copy,
                                 approx_type,
                                 q_type,
                                 bit_places,
@@ -305,7 +316,7 @@ def rec_go(formula, var_list, approx_type, q_type, bit_places, polarity):
     # Ordinary formula
     else:
         formula = rec_go_f(formula,
-                           var_list,
+                           var_list_copy,
                            approx_type,
                            q_type,
                            bit_places,
@@ -353,7 +364,7 @@ def solve_with_approximations(formula, approx_type, q_type,
 
     s.add(approximated_formula)
     result = s.check()
-
+    # print(approximated_formula, q_type) #debug
     if q_type == Quantification.UNIVERSAL:
         # Over-approximation of the formula is SAT. Approximation continues.
         if result == CheckSatResult(Z3_L_TRUE):
@@ -370,10 +381,9 @@ def solve_with_approximations(formula, approx_type, q_type,
     else:
         # Under-approximation of the formula is SAT. Original formula is SAT.
         if result == CheckSatResult(Z3_L_TRUE):
-            pass
             # print("U: The model follows:")    # DEBUG
-            z3.solve(approximated_formula)                 # DEBUG
-            print(approximated_formula)
+            # z3.solve(approximated_formula)    # DEBUG
+            pass
         # Under-approximation of the formula is UNSAT. Approximation continues.
         elif result == CheckSatResult(Z3_L_FALSE):
             result = continue_with_approximation(formula, approx_type, q_type,
