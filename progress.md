@@ -121,4 +121,6 @@ ze stránky:
 
 # 21/03/2018
 - Zvlčily mi procesy. Nějak se množí a nevím co s tím. Začne se to kazit na tomto benchmarku: ../BV_benchmarky/20170501-Heizmann-UltimateAutomizer/jain_2_true-unreach-call_true-no-overflow.i_198.smt2 Po jeho doběhnutí mi tam zůstanou viset dva procesy.
+- Tak jsem předchozí problém vyřešila (asi). Zakonalý pes byl v tom, že se timeout měřil na procesu `p`, který spouštěl parelelně proces under-aproximace a over-aproximace (`p1` a `p2`), ale při přešvihnutí jedné minuty se zabil právě jen proces `p` a ty dva potomci tam zůstali viset.
+- To mohlo možná způsobit i nekonzistenci výsledků, když jsem spustila jen jeden benchmark a když jsem je spustila všechny. Výsledek se totiž ukládá do fronty a ty přeživší potomci mohli kdykoli později doběhnout a vrazit do té fronty svůj výsledek.
 

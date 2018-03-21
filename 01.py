@@ -368,7 +368,7 @@ def solve_with_approximations(formula, approx_type, q_type,
     if q_type == Quantification.UNIVERSAL:
         # Over-approximation of the formula is SAT or the result is unknown.
         # Approximation continues.
-        print("O", result, end=" ")
+        # print("O", result, end=" ") # DEBUG
         if (result == CheckSatResult(Z3_L_TRUE) or
             result == CheckSatResult(Z3_L_UNDEF)):
 
@@ -384,7 +384,7 @@ def solve_with_approximations(formula, approx_type, q_type,
             pass
 
     else:
-        print("U", result, end=" ")
+        # print("U", result, end=" ") # DEBUG
         # Under-approximation of the formula is SAT. Original formula is SAT.
         if result == CheckSatResult(Z3_L_TRUE):
             # print("U: The model follows:")    # DEBUG
@@ -434,11 +434,34 @@ def run_paralell(formula, approx_type, final_result_queue):
                                        result_queue))
     p1.start()
     p2.start()
+    
+    p1.join(60)
+    p2.join(60)
 
-    result = result_queue.get()
+    timeout1 = False
+    timeout2 = False
 
-    p1.terminate()
-    p2.terminate()
+    # APPROXIMATED: If thread is still active
+    if p1.is_alive():
+        #print("TIME-OUT2", formula_file)
+        p1.terminate()
+        p1.join()
+        timeout1 = True
+    
+    if p2.is_alive():
+        #print("TIME-OUT2", formula_file)
+        p2.terminate()
+        p2.join()
+        timeout2 = True
+
+    if timeout1 and timeout2:
+        # result = result_queue.put(CheckSatResult(Z3_L_UNDEF)) #DEBUG
+        result = "timeout"
+    else:
+        result = result_queue.get()
+
+    # p1.terminate() # DEBUG OLD
+    # p2.terminate() # DEBUG OLD
 
     final_result_queue.put(result)
 
@@ -464,11 +487,12 @@ def main():
             # ORIGINAL FORMULA
             p = multiprocessing.Process(target=solve_without_approximations,
                                         args=(formula, result_queue_orig))
-                                        
+
             # APPROXIMATED FORMULA
             p0 = multiprocessing.Process(target=run_paralell,
                                          args=(formula, approx_type,
                                                result_queue_appr))
+
             p.start()
             p0.start()
 
@@ -489,14 +513,9 @@ def main():
                 solve_original = result_queue_orig.get()
 
             # APPROXIMATED: If thread is still active
-            if p0.is_alive():
-                #print("TIME-OUT2", formula_file)
-                p0.terminate()
-                p0.join()
+            solve_approximated = result_queue_appr.get()
+            if solve_approximated == "timeout":
                 timeout2 = True
-            else:
-                solve_approximated = result_queue_appr.get()
-
 
             # Compare original and approximation result
             if timeout1 and not timeout2:
