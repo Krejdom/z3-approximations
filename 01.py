@@ -366,31 +366,40 @@ def solve_with_approximations(formula, approx_type, q_type,
     result = s.check()
     # print(approximated_formula, q_type) #debug
     if q_type == Quantification.UNIVERSAL:
-        # Over-approximation of the formula is SAT. Approximation continues.
-        if result == CheckSatResult(Z3_L_TRUE):
+        # Over-approximation of the formula is SAT or the result is unknown.
+        # Approximation continues.
+        print("O", result, end=" ")
+        if (result == CheckSatResult(Z3_L_TRUE) or
+            result == CheckSatResult(Z3_L_UNDEF)):
+
             result = continue_with_approximation(formula, approx_type, q_type,
                                                  bit_places, polarity,
                                                  result_queue)
         # Over-approximation of the formula is UNSAT. Original formula is UNSAT.
         elif result == CheckSatResult(Z3_L_FALSE):
             pass
-        # The result is unknown.
+        # This should never happen, delete after DEBUG:
         else:
+            print("ERROR!")
             pass
 
     else:
+        print("U", result, end=" ")
         # Under-approximation of the formula is SAT. Original formula is SAT.
         if result == CheckSatResult(Z3_L_TRUE):
             # print("U: The model follows:")    # DEBUG
             # z3.solve(approximated_formula)    # DEBUG
             pass
-        # Under-approximation of the formula is UNSAT. Approximation continues.
-        elif result == CheckSatResult(Z3_L_FALSE):
+        # Under-approximation of the formula is UNSAT or the result is unknown.
+        # Approximation continues.
+        elif (result == CheckSatResult(Z3_L_FALSE) or
+              result == CheckSatResult(Z3_L_UNDEF)):
             result = continue_with_approximation(formula, approx_type, q_type,
                                                  bit_places, polarity,
                                                  result_queue)
-        # The result is unknown.
+        # This should never happen, delete after DEBUG:
         else:
+            print("ERROR!")
             pass
 
     result_queue.put(result)
@@ -448,51 +457,66 @@ def main():
         formula = z3.parse_smt2_file(formula_file)
 
         with multiprocessing.Manager() as manager:
-            result_queue = multiprocessing.Queue()
-            # return_dict = manager.dict() #OLD DELETE
+            # result_queue = multiprocessing.Queue() OLD DEBUG
+            result_queue_orig = multiprocessing.Queue()
+            result_queue_appr = multiprocessing.Queue()
 
             # ORIGINAL FORMULA
             p = multiprocessing.Process(target=solve_without_approximations,
-                                        args=(formula, result_queue))
-            p.start()
-            # Wait for 10 seconds or until process finishes
-            p.join(60)
-
-            # If thread is still active
-            if p.is_alive():
-                print("TIME-OUT1", formula_file)
-                p.terminate()
-                p.join()
-                continue
-
-            solve_original = result_queue.get()
-
+                                        args=(formula, result_queue_orig))
+                                        
             # APPROXIMATED FORMULA
             p0 = multiprocessing.Process(target=run_paralell,
-                                         args=(formula,
-                                               approx_type,
-                                               result_queue))
+                                         args=(formula, approx_type,
+                                               result_queue_appr))
+            p.start()
             p0.start()
-            # Wait for 10 seconds or until process finishes
+
+            # ORIGINAL: Wait for 60 seconds or until process finishes
+            p.join(60)
+            # APPROXIMATED: Wait for 60 seconds or until process finishes
             p0.join(60)
 
-            # If thread is still active
+            timeout1 = False
+            timeout2 = False
+            # ORIGINAL: If thread is still active
+            if p.is_alive():
+                #print("TIME-OUT1", formula_file)
+                p.terminate()
+                p.join()
+                timeout1 = True
+            else:
+                solve_original = result_queue_orig.get()
+
+            # APPROXIMATED: If thread is still active
             if p0.is_alive():
-                print("TIME-OUT2", formula_file)
+                #print("TIME-OUT2", formula_file)
                 p0.terminate()
                 p0.join()
-                continue
+                timeout2 = True
+            else:
+                solve_approximated = result_queue_appr.get()
 
-            solve_approximated = result_queue.get()
 
             # Compare original and approximation result
-            if solve_original == solve_approximated:
-                print("OK       ", formula_file)
+            if timeout1 and not timeout2:
+                print("OK!      (originál se nevypočítal, aproximace ano)", solve_approximated, formula_file)
+            elif not timeout1 and timeout2:
+                print("NOK?     (originál se vypočítal, aproximace ne)", formula_file)
+            elif timeout1 and timeout2:
+                print("OK       (obojí hodilo timeout", formula_file)
             else:
-                print("NOK      ", formula_file)
-                print("original:", solve_original)
-                print("approximated:", solve_approximated)
-                break
+                if solve_original == solve_approximated:
+                    print("OK       (výsledky se shodují)", solve_original, formula_file)
+                elif solve_original.r == Z3_L_UNDEF:
+                    print("OK!      (originál je undef, aproximace je:", solve_approximated, ")", formula_file)
+                elif solve_approximated.r == Z3_L_UNDEF:
+                    print("NOK?     (aproximace je undef, originál je:", solve_original, ")", formula_file)
+                else:
+                    print("NOK      (výsledky se neshodují)", formula_file)
+                    print("original:", solve_original)
+                    print("approximated:", solve_approximated)
+                    break
 
 if __name__ == "__main__":
     main()

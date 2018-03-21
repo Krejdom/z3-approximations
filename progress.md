@@ -112,3 +112,13 @@ ze stránky:
 - TODO: Násleudující benchmark vrací unknown-unknown, když ho pustím samotnej, když ho pustím mezi více, tak vrací unknown-result: /20170501-Heizmann-UltimateAutomizer/jain_1_true-unreach-call_true-no-overflow.i_56.smt2
 - TODO: Měla bych zjistit, jestli někdy projde aproximace, když timeoutne originální formule.
 
+# 20/3/2018
+- Něco spadlo:
+    z3.z3types.Z3Exception: b'out of memory'
+- TODO: Vyčistit kód od debugů a starých poznámek.
+- Snažím se teď řešit situaci kdy je aproximace undef a originál je sat/unsat, nastává to třeba u formule: ../BV_benchmarky/20170501-Heizmann-UltimateAutomizer/jain_1_true-unreach-call_true-no-overflow.i_408.smt2 --> budu to prostě dál aproximovat, když aproximace vyjde unknown, stejně, jako by to vyšlo nějak určitě
+- Problém v nedeterminičnosti bude pravděpodobně v tom, že na výsledek používám stejnou frontu!!
+
+# 21/03/2018
+- Zvlčily mi procesy. Nějak se množí a nevím co s tím. Začne se to kazit na tomto benchmarku: ../BV_benchmarky/20170501-Heizmann-UltimateAutomizer/jain_2_true-unreach-call_true-no-overflow.i_198.smt2 Po jeho doběhnutí mi tam zůstanou viset dva procesy.
+
