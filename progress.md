@@ -109,7 +109,8 @@ ze stránky:
 5 Závěr
 
 - TODO: vylepšení: neopakovat část s přepínáním polarity
-- TODO: Násleudující benchmark vrací unknown-unknown, když ho pustím samotnej, když ho pustím mezi více, tak vrací unknown-result: /20170501-Heizmann-UltimateAutomizer/jain_1_true-unreach-call_true-no-overflow.i_56.smt2
+- SOLVED: Násleudující benchmark vrací unknown-unknown, když ho pustím samotnej, když ho pustím mezi více, tak vrací unknown-result:
+    ../BV_benchmarky/20170501-Heizmann-UltimateAutomizer/jain_1_true-unreach-call_true-no-overflow.i_56.smt2
 - TODO: Měla bych zjistit, jestli někdy projde aproximace, když timeoutne originální formule.
 
 # 20/3/2018
@@ -120,7 +121,48 @@ ze stránky:
 - Problém v nedeterminičnosti bude pravděpodobně v tom, že na výsledek používám stejnou frontu!!
 
 # 21/03/2018
-- Zvlčily mi procesy. Nějak se množí a nevím co s tím. Začne se to kazit na tomto benchmarku: ../BV_benchmarky/20170501-Heizmann-UltimateAutomizer/jain_2_true-unreach-call_true-no-overflow.i_198.smt2 Po jeho doběhnutí mi tam zůstanou viset dva procesy.
+- SOLVED: Zvlčily mi procesy. Nějak se množí a nevím co s tím. Začne se to kazit na tomto benchmarku (Po jeho doběhnutí mi tam zůstanou viset dva procesy.):
+    ../BV_benchmarky/20170501-Heizmann-UltimateAutomizer/jain_2_true-unreach-call_true-no-overflow.i_198.smt2 
 - Tak jsem předchozí problém vyřešila (asi). Zakonalý pes byl v tom, že se timeout měřil na procesu `p`, který spouštěl parelelně proces under-aproximace a over-aproximace (`p1` a `p2`), ale při přešvihnutí jedné minuty se zabil právě jen proces `p` a ty dva potomci tam zůstali viset.
 - To mohlo možná způsobit i nekonzistenci výsledků, když jsem spustila jen jeden benchmark a když jsem je spustila všechny. Výsledek se totiž ukládá do fronty a ty přeživší potomci mohli kdykoli později doběhnout a vrazit do té fronty svůj výsledek.
+- Dál by možná bylo fajn, aby když se dopočítá aproximace, tak zabila ten originál a napsalo to `OK!`, abych věděla, v kolika případech to pomůže. A nebo tam rovnou vrazit časový údaj, ať už se to dá porovnávat.
+- Pořád se některé formule nechtějí v aproximaci dopočítat: ../BV_benchmarky/20170501-Heizmann-UltimateAutomizer/jain_1_true-unreach-call_true-no-overflow.i_408.smt2
 
+# 22/03/2018
+- z3.z3types.Z3Exception: b'bit-vector size must be greater than zero' po ../BV_benchmarky/wintersteiger/fmsd13/ranking/filesys_smbmrx_midatlas.c.smt2
+
+# 26/03/2018
+- TODO na tento týden:
+    1. DONE Měřit, jak dlouho trvá rozhodnutí formule (originál vs. aproximace)
+    2. Zjistit, za jak dlouho timeoutují aproximace (nesčítá se to náhodou? to by vysvětlovalo to, že tam teď nejsou vykřičníky, jak jsem to předělala)
+    3. Sepsat část k polaritě.
+    4. Udělat prezentaci na 4minutovou obhajobu.
+    5. Udělat nějaký pěkný graf.
+
+- Měřím čas podle: https://stackoverflow.com/questions/7370801/measure-time-elapsed-in-python
+- Návod na grafy (tento vypadá fajn): http://pythonic.eu/fjfi/posts/matplotlib.html
+- Výsledky z prvního pokusu (id, original, approximated) jsou v souboru:
+    result_20170501-Heizmann-UltimateAutomizer.txt
+
+# 27/03/2018
+- Opravila jsem problém, který nastával u různě velkých proměnných, protože se rozšiřovaly na `max_bit_width` i ty, co byly kratší. Přidala jsem podmínku do funkce, která dělá aproximace a teď by se měla v takovém případě vrátit originální formule.
+- Další chyba, která nastává je:
+    ctypes.ArgumentError: argument 1: <class 'RecursionError'>: maximum recursion depth exceeded
+- A to např. na benchmarku:
+    ../BV_benchmarky/wintersteiger/fmsd13/fixpoint/cache-coherence-2-fixpoint-2.smt2
+- Rekurze je zrádná. Limit lze v Pythonu zvýšit pomocí:
+    `sys.setrecursionlimit(1500)`
+- Další možnost je optimalozovat kvantifikované formule následujícím způsobem: Pokud je ve formule tvaru ForAll x (ForAll y (...)), není nutné ji komplet rekurzivně procházet, ale pomocí cyklu se podívat na `body` vnější formule a případně kvantifikovanou proměnnou přidat do seznamu rovnou.
+
+# 28/03/2018
+- Při spuštění testů 20170501-Heizmann-UltimateAutomizer s timeoutem 100 s:
+    - apro_faster:  4
+    - orig_faster:  62
+    - same_time:  65
+- Dělám slajdy na 4 minutovou obhajobu do prezentačních dovedností.
+- Někde chci mít ukázku toho, jak vypadají formule:
+    - smt2 formát ->
+    - příkaz, kterým se to převede ->
+    - formát po konverzi (prefixový) ->
+    - ukázka ve stromu
+    - + vytvětlení rekurzního zpracování a sekvenčních vylepšení kvantifikátorů viz výše.

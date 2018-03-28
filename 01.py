@@ -6,6 +6,8 @@ import time
 from enum import Enum
 from z3 import *
 
+# Prevent RecursionError        # DEBUG maybe delete it, after incorporating sequential improvement
+sys.setrecursionlimit(1500)
 
 class Quantification(Enum):
     """Determine which variables (universaly or existentialy quantified)
@@ -114,34 +116,37 @@ def approximate(formula, approx_type, bit_places):
         approx_type approximation type (0, 1, 2)
         bit_places  new bit width
     """
+    # Do not expand smaller formulae.
+    if formula.size() <= bit_places:
+        # Zero-extension
+        if approx_type == ReductionType.ZERO_EXTENSION:
+            return zero_extension(formula, bit_places)
 
-    # Zero-extension
-    if approx_type == ReductionType.ZERO_EXTENSION:
-        return zero_extension(formula, bit_places)
+        # One-extension
+        elif approx_type == ReductionType.ONE_EXTENSION:
+            return one_extension(formula, bit_places)
 
-    # One-extension
-    elif approx_type == ReductionType.ONE_EXTENSION:
-        return one_extension(formula, bit_places)
+        # Sign-extension
+        elif approx_type == ReductionType.SIGN_EXTENSION:
+            return sign_extension(formula, bit_places)
 
-    # Sign-extension
-    elif approx_type == ReductionType.SIGN_EXTENSION:
-        return sign_extension(formula, bit_places)
+        # Right-zero-extension
+        elif approx_type == ReductionType.RIGHT_ZERO_EXTENSION:
+            return right_zero_extension(formula, bit_places)
 
-    # Right-zero-extension
-    elif approx_type == ReductionType.RIGHT_ZERO_EXTENSION:
-        return right_zero_extension(formula, bit_places)
+        # Right-one-extension
+        elif approx_type == ReductionType.RIGHT_ONE_EXTENSION:
+            return right_one_extension(formula, bit_places)
 
-    # Right-one-extension
-    elif approx_type == ReductionType.RIGHT_ONE_EXTENSION:
-        return right_one_extension(formula, bit_places)
+        # Right-sign-extension
+        elif approx_type == ReductionType.RIGHT_SIGN_EXTENSION:
+            return right_sign_extension(formula, bit_places)
 
-    # Right-sign-extension
-    elif approx_type == ReductionType.RIGHT_SIGN_EXTENSION:
-        return right_sign_extension(formula, bit_places)
-
-    # Unknown type of approximation
+        # Unknown type of approximation
+        else:
+            raise ValueError("Select approximation type.")
     else:
-        raise ValueError("Select approximation type.")
+        return formula
 
 
 def q_var_list(formula):
@@ -182,6 +187,7 @@ def qform_process(formula, var_list, approx_type,
 
     # Recursively process the body of the formula
     var_list_copy = list(var_list)
+
     body = rec_go(formula.body(),
                   var_list_copy,
                   approx_type,
@@ -300,7 +306,7 @@ def rec_go_f(formula, var_list, approx_type, q_type, bit_places, polarity):
 
 
 def rec_go(formula, var_list, approx_type, q_type, bit_places, polarity):
-    """Recursively go through the formula and aply approximations.
+    """Recursively go through the formula and apply approximations.
     """
     var_list_copy = list(var_list)
 
@@ -328,7 +334,7 @@ def rec_go(formula, var_list, approx_type, q_type, bit_places, polarity):
 def continue_with_approximation(formula, approx_type, q_type, bit_places,
                                 polarity, result_queue):
     if bit_places < (max_bit_width - 2):
-        # Swith left/right approximation
+        # Switch left/right approximation
         if approx_type.value > 0:
             approx_type = ReductionType(- approx_type.value)
         else:
@@ -435,8 +441,8 @@ def run_paralell(formula, approx_type, final_result_queue):
     p1.start()
     p2.start()
     
-    p1.join(60)
-    p2.join(60)
+    p1.join(30)
+    p2.join(30)
 
     timeout1 = False
     timeout2 = False
@@ -493,37 +499,42 @@ def main():
                                          args=(formula, approx_type,
                                                result_queue_appr))
 
+            p_start = time.time()
             p.start()
+            p0_start = time.time()
             p0.start()
 
             # ORIGINAL: Wait for 60 seconds or until process finishes
             p.join(60)
-            # APPROXIMATED: Wait for 60 seconds or until process finishes
-            p0.join(60)
 
             timeout1 = False
             timeout2 = False
+            p_time = 300
+            p0_time = 300
             # ORIGINAL: If thread is still active
             if p.is_alive():
-                #print("TIME-OUT1", formula_file)
                 p.terminate()
                 p.join()
                 timeout1 = True
             else:
                 solve_original = result_queue_orig.get()
+                p_end = time.time()
+                p_time = p_end - p_start
 
-            # APPROXIMATED: If thread is still active
             solve_approximated = result_queue_appr.get()
             if solve_approximated == "timeout":
                 timeout2 = True
+            else:
+                p0_end = time.time()
+                p0_time = p0_end - p0_start
 
             # Compare original and approximation result
             if timeout1 and not timeout2:
-                print("OK!      (originál se nevypočítal, aproximace ano)", solve_approximated, formula_file)
+                print("OK!      (timeout originálu, výsledek aproximace)", solve_approximated, formula_file)
             elif not timeout1 and timeout2:
-                print("NOK?     (originál se vypočítal, aproximace ne)", formula_file)
+                print("NOK?     (timeout aproximace, výsledek originálu)", solve_original, formula_file)
             elif timeout1 and timeout2:
-                print("OK       (obojí hodilo timeout", formula_file)
+                print("OK       (timeout obojího)", formula_file)
             else:
                 if solve_original == solve_approximated:
                     print("OK       (výsledky se shodují)", solve_original, formula_file)
@@ -536,6 +547,12 @@ def main():
                     print("original:", solve_original)
                     print("approximated:", solve_approximated)
                     break
+
+            # Save the result.
+            with open("result.txt", "a") as my_file:
+                record = str(i) + " " + str(p_time) + " " + str(p0_time) + "\n"
+                my_file.write(record)
+
 
 if __name__ == "__main__":
     main()
