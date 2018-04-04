@@ -6,8 +6,10 @@ import time
 from enum import Enum
 from z3 import *
 
-# Prevent RecursionError        # DEBUG maybe delete it, after incorporating sequential improvement
+# Prevent RecursionError
+# DEBUG maybe delete it, after incorporating sequential improvement
 sys.setrecursionlimit(1500)
+
 
 class Quantification(Enum):
     """Determine which variables (universaly or existentialy quantified)
@@ -144,7 +146,7 @@ def approximate(formula, approx_type, bit_places):
 
         # Unknown type of approximation
         else:
-            raise ValueError("Select approximation type.")
+            raise ValueError("Select the approximation type.")
     else:
         return formula
 
@@ -165,7 +167,7 @@ def q_var_list(formula):
             q_vars.append(Bool(name))
 
         else:
-            raise ValueError("Unknown type of variable:", formula.var_sort(i))
+            raise ValueError("Unknown type of the variable:", formula.var_sort(i))
 
     return q_vars
 
@@ -212,14 +214,15 @@ def complexform_process(formula, var_list, approx_type,
     new_children = []
     var_list_copy = list(var_list)
 
-    # Switch polarity when negation
+    # Negation: Switch the polarity
     if formula.decl().name() == "not":
         if polarity == Polarity.POSITIVE:
             polarity = Polarity.NEGATIVE
         else:
             polarity = Polarity.POSITIVE
         pass
-    # Process implication with polarity switching
+
+    # Implication: Switch polarity
     elif formula.decl().name() == "=>":
         # Switch polarity just for the left part of implication
         if polarity == Polarity.POSITIVE:
@@ -241,7 +244,7 @@ def complexform_process(formula, var_list, approx_type,
                                    polarity))
         return Implies(*new_children)
 
-    # Recursively process children of formula
+    # Recursively process children of the formula
     for i in range(len(formula.children())):
         new_children.append(rec_go(formula.children()[i],
                                    var_list_copy,
@@ -262,12 +265,11 @@ def complexform_process(formula, var_list, approx_type,
         for ch in new_children[1::]:
             formula = formula + ch
 
-    elif (formula.decl().name() == "bvmul") and (len(new_children) > 2):
-        raise ValueError("Fix needed (TODO: bvmul)")
-
-    # TODO: bvmul
+    # TODO: bvmul   # debug - delete if never happend
     # problems with Distinct() or multiplication may arrise
     # print(formula.decl().name())
+    elif (formula.decl().name() == "bvmul") and (len(new_children) > 2):
+        raise ValueError("Fix needed (TODO: bvmul)")
 
     # Recreate problem-free operands
     else:
@@ -283,8 +285,8 @@ def rec_go_f(formula, var_list, approx_type, q_type, bit_places, polarity):
 
     # Variable
     elif z3.is_var(formula):
-        # order = len(var_list) - z3.get_var_index(formula) - 1     #orginal
-        order = - z3.get_var_index(formula) - 1   #debug
+        # order = len(var_list) - z3.get_var_index(formula) - 1     # orginal
+        order = - z3.get_var_index(formula) - 1   # debug
 
         # Approximate if var is bit-vecotr and is quantified in the right way
         if (type(formula) == BitVecRef) and (var_list[order][1] == q_type):
@@ -293,6 +295,7 @@ def rec_go_f(formula, var_list, approx_type, q_type, bit_places, polarity):
             if max_bit_width < formula.size():
                 max_bit_width = formula.size()
             formula = approximate(formula, approx_type, bit_places)
+
     # Complex formula
     else:
         var_list_copy = list(var_list)
@@ -302,6 +305,7 @@ def rec_go_f(formula, var_list, approx_type, q_type, bit_places, polarity):
                                       q_type,
                                       bit_places,
                                       polarity)
+
     return formula
 
 
@@ -310,7 +314,7 @@ def rec_go(formula, var_list, approx_type, q_type, bit_places, polarity):
     """
     var_list_copy = list(var_list)
 
-    # Handle the quantifiers
+    # Quantified formula
     if type(formula) == QuantifierRef:
         formula = qform_process(formula,
                                 var_list_copy,
@@ -353,8 +357,6 @@ def continue_with_approximation(formula, approx_type, q_type, bit_places,
                                          polarity,
                                          result_queue)
     else:
-        # print("Cannot use approxamation. :(\n")
-        # print("Continue with original formula...")
         return solve_without_approximations(formula, result_queue)
 
 
@@ -370,24 +372,24 @@ def solve_with_approximations(formula, approx_type, q_type,
 
     s.add(approximated_formula)
     result = s.check()
-    # print(approximated_formula, q_type) #debug
+
     if q_type == Quantification.UNIVERSAL:
         # Over-approximation of the formula is SAT or the result is unknown.
         # Approximation continues.
         # print("O", result, end=" ") # DEBUG
         if (result == CheckSatResult(Z3_L_TRUE) or
-            result == CheckSatResult(Z3_L_UNDEF)):
+                result == CheckSatResult(Z3_L_UNDEF)):
 
             result = continue_with_approximation(formula, approx_type, q_type,
                                                  bit_places, polarity,
                                                  result_queue)
-        # Over-approximation of the formula is UNSAT. Original formula is UNSAT.
+        # Over-approximation of the formula is UNSAT.
+        # Original formula is UNSAT.
         elif result == CheckSatResult(Z3_L_FALSE):
             pass
-        # This should never happen, delete after DEBUG:
+        # Invalid result
         else:
-            print("ERROR!")
-            pass
+            raise ValueError("Invalid result was given.")
 
     else:
         # print("U", result, end=" ") # DEBUG
@@ -403,19 +405,19 @@ def solve_with_approximations(formula, approx_type, q_type,
             result = continue_with_approximation(formula, approx_type, q_type,
                                                  bit_places, polarity,
                                                  result_queue)
-        # This should never happen, delete after DEBUG:
+        # Invalid result
         else:
-            print("ERROR!")
-            pass
+            raise ValueError("Invalid result was given.")
 
     result_queue.put(result)
     return result
 
 
 def solve_without_approximations(formula, result_queue):
+    """Solve the given formula without any preprocessing.
+    """
     s = z3.Solver()
     s.add(formula)
-    # print("The result without approximations is:", s.check(), "\n")
     result_queue.put(s.check())
     return s.check()
 
@@ -440,7 +442,7 @@ def run_paralell(formula, approx_type, final_result_queue):
                                        result_queue))
     p1.start()
     p2.start()
-    
+
     p1.join(30)
     p2.join(30)
 
@@ -449,25 +451,19 @@ def run_paralell(formula, approx_type, final_result_queue):
 
     # APPROXIMATED: If thread is still active
     if p1.is_alive():
-        #print("TIME-OUT2", formula_file)
         p1.terminate()
         p1.join()
         timeout1 = True
-    
+
     if p2.is_alive():
-        #print("TIME-OUT2", formula_file)
         p2.terminate()
         p2.join()
         timeout2 = True
 
     if timeout1 and timeout2:
-        # result = result_queue.put(CheckSatResult(Z3_L_UNDEF)) #DEBUG
         result = "timeout"
     else:
         result = result_queue.get()
-
-    # p1.terminate() # DEBUG OLD
-    # p2.terminate() # DEBUG OLD
 
     final_result_queue.put(result)
 
@@ -511,6 +507,7 @@ def main():
             timeout2 = False
             p_time = 300
             p0_time = 300
+
             # ORIGINAL: If thread is still active
             if p.is_alive():
                 p.terminate()

@@ -104,7 +104,9 @@ ze stránky:
     3.0 Nástroj Z3 (popis)
     3.1 Python API (příklad užití)
         3.1.0 De Bruijn indexování
-    3.2 Pseudokód aproximací 
+    3.2 Pseudokód aproximací
+        3.2.0 Paralelní souběh procesů
+        3.2.1 Polarita
 4 Experimentální vyhodnocení
 5 Závěr
 
@@ -134,9 +136,9 @@ ze stránky:
 # 26/03/2018
 - TODO na tento týden:
     1. DONE Měřit, jak dlouho trvá rozhodnutí formule (originál vs. aproximace)
-    2. Zjistit, za jak dlouho timeoutují aproximace (nesčítá se to náhodou? to by vysvětlovalo to, že tam teď nejsou vykřičníky, jak jsem to předělala)
+    2. DONE Zjistit, za jak dlouho timeoutují aproximace (nesčítá se to náhodou? to by vysvětlovalo to, že tam teď nejsou vykřičníky, jak jsem to předělala)
     3. Sepsat část k polaritě.
-    4. Udělat prezentaci na 4minutovou obhajobu.
+    4. DONE Udělat prezentaci na 4minutovou obhajobu.
     5. Udělat nějaký pěkný graf.
 
 - Měřím čas podle: https://stackoverflow.com/questions/7370801/measure-time-elapsed-in-python
@@ -166,3 +168,16 @@ ze stránky:
     - formát po konverzi (prefixový) ->
     - ukázka ve stromu
     - + vytvětlení rekurzního zpracování a sekvenčních vylepšení kvantifikátorů viz výše.
+    
+# 29/03/2018
+- Prezentovala jsem čtyřminutovou obhajobu. 4 minuty jsou strašně málo. Aspoň mám předpřipravenou prezentaci na obhajobu.
+
+# 30/03/2018
+- Překopírovala jsem tabulku a schéma z obhajoby do textu bakalářky, v tabulce budou snad potom hezčí výsledky. :D
+
+# 31/03/2018
+- Píšu sekci o polaritě.
+- Už jednou jsem řešila problém, že se mi nečíslují sekce a podsekce. Byl to tento problém: https://tex.stackexchange.com/questions/299969/titlesec-loss-of-section-numbering-with-the-new-update-2016-03-15 pro jeho vyřešení stačí nahrát do složky se zdrojákama soubor titlesec.sty, který jsem stáhla už nevím odkud.
+- Mám uvdávat všechny tři De Morganovy zákony?
+- Kam dát odkaz na citaci u definice?
+
