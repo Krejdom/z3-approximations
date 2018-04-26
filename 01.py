@@ -8,7 +8,7 @@ from z3 import *
 
 # Prevent RecursionError
 # DEBUG maybe delete it, after incorporating sequential improvement
-sys.setrecursionlimit(1500)
+sys.setrecursionlimit(2000)
 
 
 class Quantification(Enum):
@@ -119,7 +119,7 @@ def approximate(formula, approx_type, bit_places):
         bit_places  new bit width
     """
     # Do not expand smaller formulae.
-    if formula.size() <= bit_places:
+    if formula.size() > bit_places:
         # Zero-extension
         if approx_type == ReductionType.ZERO_EXTENSION:
             return zero_extension(formula, bit_places)
@@ -151,60 +151,80 @@ def approximate(formula, approx_type, bit_places):
         return formula
 
 
-def q_var_list(formula):
-    q_vars = []
-
+def update_vars(new_vars, formula):
+    """Add quantified variables from formula to the new_vars list.
+    """
     for i in range(formula.num_vars()):
         name = formula.var_name(i)
 
         # Type BV
         if z3.is_bv_sort(formula.var_sort(i)):
             size = formula.var_sort(i).size()
-            q_vars.append(BitVec(name, size))
+            new_vars.append(BitVec(name, size))
 
         # Type Bool
         elif formula.var_sort(i).is_bool():
-            q_vars.append(Bool(name))
+            new_vars.append(Bool(name))
 
         else:
             raise ValueError("Unknown type of the variable:", formula.var_sort(i))
 
-    return q_vars
+
+def get_q_type(formula, polarity):
+    """Return current quantification type.
+    """
+    if ((formula.is_forall() and (polarity == Polarity.POSITIVE)) or
+       ((not formula.is_forall()) and (polarity == Polarity.NEGATIVE))):
+        return Quantification.UNIVERSAL
+    else:
+        return Quantification.EXISTENTIAL
+
+
+def recreate_vars(formula, var_list, polarity):
+    """Recreate the list of quantified variables in formula and update var_list.
+    """
+    new_vars = []
+    quantification = get_q_type(formula, polarity)
+
+    # Add quantified variables to the var_list
+    for i in range(formula.num_vars()):
+        var_list.append((formula.var_name(i), quantification))
+
+    # Recreate list of variables bounded by this quantifier
+    update_vars(new_vars, formula)
+
+    # Sequentialy process following quantifiers
+    while ((type(formula.body()) == QuantifierRef) and
+           ((formula.is_forall() and formula.body().is_forall()) or
+            (not formula.is_forall() and not formula.body().is_forall()))):
+        for i in range(formula.body().num_vars()):
+            var_list.append((formula.body().var_name(i), quantification))
+        update_vars(new_vars, formula.body())
+        formula = formula.body()
+
+    return (new_vars, formula)
 
 
 def qform_process(formula, var_list, approx_type,
                   q_type, bit_places, polarity):
     """Create new quantified formula with modified body.
     """
-    # Identification of quantification type
-    if ((formula.is_forall() and (polarity == Polarity.POSITIVE)) or
-       ((not formula.is_forall()) and (polarity == Polarity.NEGATIVE))):
-        quantification = Quantification.UNIVERSAL
-    else:
-        quantification = Quantification.EXISTENTIAL
+    # Recreate the list of quantified variables and update current formula
+    new_vars, formula = recreate_vars(formula, var_list, polarity)
 
-    # Add quantified variables to the var_list
-    for i in range(formula.num_vars()):
-        var_list.append((formula.var_name(i), quantification))
-
-    # Recursively process the body of the formula
-    var_list_copy = list(var_list)
-
-    body = rec_go(formula.body(),
-                  var_list_copy,
+    # Recursively process the body of the formula and create the new body
+    new_body = rec_go(formula.body(),
+                  list(var_list),
                   approx_type,
                   q_type,
                   bit_places,
                   polarity)
 
-    # Recreate the list of quantified variables
-    q_vars = q_var_list(formula)
-
     # Create new quantified formula with modified body
     if formula.is_forall():
-        formula = ForAll(q_vars, body)
+        formula = ForAll(new_vars, new_body)
     else:
-        formula = Exists(q_vars, body)
+        formula = Exists(new_vars, new_body)
 
     return formula
 
@@ -216,19 +236,25 @@ def complexform_process(formula, var_list, approx_type,
 
     # Negation: Switch the polarity
     if formula.decl().name() == "not":
+        polarity = Polarity(not polarity.value)
+        """
         if polarity == Polarity.POSITIVE:
             polarity = Polarity.NEGATIVE
         else:
             polarity = Polarity.POSITIVE
         pass
+        """ # OLD DEBUG
 
     # Implication: Switch polarity
     elif formula.decl().name() == "=>":
         # Switch polarity just for the left part of implication
+        polarity2 = Polarity(not polarity.value)
+        """
         if polarity == Polarity.POSITIVE:
             polarity2 = Polarity.NEGATIVE
         else:
             polarity2 = Polarity.POSITIVE
+        """
 
         new_children.append(rec_go(formula.children()[0],
                                    var_list_copy,
@@ -285,8 +311,8 @@ def rec_go_f(formula, var_list, approx_type, q_type, bit_places, polarity):
 
     # Variable
     elif z3.is_var(formula):
-        # order = len(var_list) - z3.get_var_index(formula) - 1     # orginal
-        order = - z3.get_var_index(formula) - 1   # debug
+        # order = len(var_list) - z3.get_var_index(formula) - 1  # orginal debug
+        order = - z3.get_var_index(formula) - 1
 
         # Approximate if var is bit-vecotr and is quantified in the right way
         if (type(formula) == BitVecRef) and (var_list[order][1] == q_type):
@@ -312,12 +338,10 @@ def rec_go_f(formula, var_list, approx_type, q_type, bit_places, polarity):
 def rec_go(formula, var_list, approx_type, q_type, bit_places, polarity):
     """Recursively go through the formula and apply approximations.
     """
-    var_list_copy = list(var_list)
-
     # Quantified formula
     if type(formula) == QuantifierRef:
         formula = qform_process(formula,
-                                var_list_copy,
+                                list(var_list),
                                 approx_type,
                                 q_type,
                                 bit_places,
@@ -326,7 +350,7 @@ def rec_go(formula, var_list, approx_type, q_type, bit_places, polarity):
     # Ordinary formula
     else:
         formula = rec_go_f(formula,
-                           var_list_copy,
+                           list(var_list),
                            approx_type,
                            q_type,
                            bit_places,
@@ -337,13 +361,11 @@ def rec_go(formula, var_list, approx_type, q_type, bit_places, polarity):
 
 def continue_with_approximation(formula, approx_type, q_type, bit_places,
                                 polarity, result_queue):
+    # Do not approximate if maximal bit width is reached.
     if bit_places < (max_bit_width - 2):
         # Switch left/right approximation
-        if approx_type.value > 0:
-            approx_type = ReductionType(- approx_type.value)
-        else:
-            approx_type = ReductionType(- approx_type.value)
-
+        approx_type = ReductionType(- approx_type.value)
+        if approx_type.value < 0:
             # Resize bit width
             if bit_places == 1:
                 bit_places += 1
@@ -509,6 +531,7 @@ def main():
             p0_time = 300
 
             # ORIGINAL: If thread is still active
+            solve_original = None   # Set default value. DEBUG
             if p.is_alive():
                 p.terminate()
                 p.join()
@@ -547,7 +570,7 @@ def main():
 
             # Save the result.
             with open("result.txt", "a") as my_file:
-                record = str(i) + " " + str(p_time) + " " + str(p0_time) + "\n"
+                record = str(i) + " " + str(p_time) + " " + str(p0_time) + " " + str(solve_original) + " " + str(solve_approximated)     + "\n"
                 my_file.write(record)
 
 

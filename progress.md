@@ -178,6 +178,32 @@ ze stránky:
 # 31/03/2018
 - Píšu sekci o polaritě.
 - Už jednou jsem řešila problém, že se mi nečíslují sekce a podsekce. Byl to tento problém: https://tex.stackexchange.com/questions/299969/titlesec-loss-of-section-numbering-with-the-new-update-2016-03-15 pro jeho vyřešení stačí nahrát do složky se zdrojákama soubor titlesec.sty, který jsem stáhla už nevím odkud.
-- Mám uvdávat všechny tři De Morganovy zákony?
+- Mám udávat všechny tři De Morganovy zákony?
 - Kam dát odkaz na citaci u definice?
+
+# 04/04/2018
+- Překopala jsem fci `qform_process` a implementovala "sekvenční zkratku". Odstranila jsem i zvýšení limitu rekurze a běží to jak na drátkách (aspoň na tom jednom benchmarku, kde to předtím padalo, jdu to zkusit i na další.
+- TODO: `qform_process` rozložit fci na víc menších. Logicky pojmenovat. To by chtělo asi u všech fcí. O:)
+- Tak na té rekurzi to padá pořád, ale sice to vyhodí chybu, ale výsledek to normálně vrátí.
+
+# 05/04/2018
+- Noční můra se vrací. b'bit-vector size must be greater than zero', padá to u banchmarků ../BV_benchmarky/wintersteiger/fmsd13/fixpoint/fixpoint/sdlx-fixpoint-4.smt2
+
+# 10/04/2018
+- TOOD: Ověřit, že rekurze vrátí správný výsledek do result.
+- done: Není náhodou De Morgan Tvrzení?
+- Na tabulky je dobré používat balíček booktabs. (Martin)
+- TODO: Citace nejen číslem.
+- TODO: Dopsat Strejdu do poděkování za to, že mi pověděl chytrou věc. (wall time vs. CPU time, nástroje: Cgroups, Banchexec?)
+
+# 17/04/2018
+- Píšu a píšu.
+- TODO: V Bibliografii mám anglické "in", to by chtělo odstranit.
+
+# 19/04/2018
+- Udělala jsem vizualiazci různých typů redukcí do textu.
+
+# 23/04/2018
+- Asi jsem objevila podstatnou chybu. Měla jsem přehozené menšítko v podmínce o aproximacích. Všechny dosavadní výsledky jsou tedy pravděpodobně nerelevantní.
+- Kreslím si schéma funkcí a rozkládám ty velké na menší.
 
