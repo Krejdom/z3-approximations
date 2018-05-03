@@ -151,7 +151,7 @@ def approximate(formula, approx_type, bit_places):
         return formula
 
 
-def update_vars(new_vars, formula):
+def recreate_vars(new_vars, formula):
     """Add quantified variables from formula to the new_vars list.
     """
     for i in range(formula.num_vars()):
@@ -180,7 +180,7 @@ def get_q_type(formula, polarity):
         return Quantification.EXISTENTIAL
 
 
-def recreate_vars(formula, var_list, polarity):
+def update_vars(formula, var_list, polarity):
     """Recreate the list of quantified variables in formula and update var_list.
     """
     new_vars = []
@@ -191,7 +191,7 @@ def recreate_vars(formula, var_list, polarity):
         var_list.append((formula.var_name(i), quantification))
 
     # Recreate list of variables bounded by this quantifier
-    update_vars(new_vars, formula)
+    recreate_vars(new_vars, formula)
 
     # Sequentialy process following quantifiers
     while ((type(formula.body()) == QuantifierRef) and
@@ -199,7 +199,7 @@ def recreate_vars(formula, var_list, polarity):
             (not formula.is_forall() and not formula.body().is_forall()))):
         for i in range(formula.body().num_vars()):
             var_list.append((formula.body().var_name(i), quantification))
-        update_vars(new_vars, formula.body())
+        recreate_vars(new_vars, formula.body())
         formula = formula.body()
 
     return (new_vars, formula)
@@ -210,7 +210,7 @@ def qform_process(formula, var_list, approx_type,
     """Create new quantified formula with modified body.
     """
     # Recreate the list of quantified variables and update current formula
-    new_vars, formula = recreate_vars(formula, var_list, polarity)
+    new_vars, formula = update_vars(formula, var_list, polarity)
 
     # Recursively process the body of the formula and create the new body
     new_body = rec_go(formula.body(),
