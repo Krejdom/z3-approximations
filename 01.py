@@ -1,10 +1,16 @@
 #!/usr/bin/python3
 
-import sys
-import multiprocessing
-import time
+
 from enum import Enum
-from z3 import *
+import multiprocessing
+import sys
+import time
+
+import z3
+
+from reduction_types import zero_extension, right_zero_extension
+from reduction_types import one_extension, right_one_extension
+from reduction_types import sign_extension, right_sign_extension
 
 # Prevent RecursionError
 # DEBUG maybe delete it, after incorporating sequential improvement
@@ -34,80 +40,6 @@ class ReductionType(Enum):
 
 
 max_bit_width = 1
-
-
-def zero_extension(formula, bit_places):
-    """Set the rest of bits on the left to 0.
-    """
-    complement = BitVecVal(0, formula.size() - bit_places)
-    formula = Concat(complement, (Extract(bit_places - 1, 0, formula)))
-
-    return formula
-
-
-def one_extension(formula, bit_places):
-    """Set the rest of bits on the left to 1.
-    """
-    complement = BitVecVal(0, formula.size() - bit_places) - 1
-    formula = Concat(complement, (Extract(bit_places - 1, 0, formula)))
-
-    return formula
-
-
-def sign_extension(formula, bit_places):
-    """Set the rest of bits on the left to the value of the sign bit.
-    """
-    sign_bit = Extract(bit_places - 1, bit_places - 1, formula)
-
-    complement = sign_bit
-    for _ in range(formula.size() - bit_places - 1):
-        complement = Concat(sign_bit, complement)
-
-    formula = Concat(complement, (Extract(bit_places - 1, 0, formula)))
-
-    return formula
-
-
-def right_zero_extension(formula, bit_places):
-    """Set the rest of bits on the right to 0.
-    """
-    complement = BitVecVal(0, formula.size() - bit_places)
-    formula = Concat(Extract(formula.size() - 1,
-                             formula.size() - bit_places,
-                             formula),
-                     complement)
-
-    return formula
-
-
-def right_one_extension(formula, bit_places):
-    """Set the rest of bits on the right to 1.
-    """
-    complement = BitVecVal(0, formula.size() - bit_places) - 1
-    formula = Concat(Extract(formula.size() - 1,
-                             formula.size() - bit_places,
-                             formula),
-                     complement)
-
-    return formula
-
-
-def right_sign_extension(formula, bit_places):
-    """Set the rest of bits on the right to the value of the sign bit.
-    """
-    sign_bit_position = formula.size() - bit_places
-    sign_bit = Extract(sign_bit_position, sign_bit_position, formula)
-
-    complement = sign_bit
-    for _ in range(sign_bit_position - 1):
-        complement = Concat(sign_bit, complement)
-
-    formula = Concat(Extract(formula.size() - 1,
-                             sign_bit_position,
-                             formula),
-                     complement)
-
-    return formula
 
 
 def approximate(formula, approx_type, bit_places):
@@ -160,11 +92,11 @@ def recreate_vars(new_vars, formula):
         # Type BV
         if z3.is_bv_sort(formula.var_sort(i)):
             size = formula.var_sort(i).size()
-            new_vars.append(BitVec(name, size))
+            new_vars.append(z3.BitVec(name, size))
 
         # Type Bool
         elif formula.var_sort(i).is_bool():
-            new_vars.append(Bool(name))
+            new_vars.append(z3.Bool(name))
 
         else:
             raise ValueError("Unknown type of the variable:", formula.var_sort(i))
@@ -194,7 +126,7 @@ def update_vars(formula, var_list, polarity):
     recreate_vars(new_vars, formula)
 
     # Sequentialy process following quantifiers
-    while ((type(formula.body()) == QuantifierRef) and
+    while ((type(formula.body()) == z3.QuantifierRef) and
            ((formula.is_forall() and formula.body().is_forall()) or
             (not formula.is_forall() and not formula.body().is_forall()))):
         for i in range(formula.body().num_vars()):
@@ -222,9 +154,9 @@ def qform_process(formula, var_list, approx_type,
 
     # Create new quantified formula with modified body
     if formula.is_forall():
-        formula = ForAll(new_vars, new_body)
+        formula = z3.ForAll(new_vars, new_body)
     else:
-        formula = Exists(new_vars, new_body)
+        formula = z3.Exists(new_vars, new_body)
 
     return formula
 
@@ -237,24 +169,11 @@ def complexform_process(formula, var_list, approx_type,
     # Negation: Switch the polarity
     if formula.decl().name() == "not":
         polarity = Polarity(not polarity.value)
-        """
-        if polarity == Polarity.POSITIVE:
-            polarity = Polarity.NEGATIVE
-        else:
-            polarity = Polarity.POSITIVE
-        pass
-        """ # OLD DEBUG
 
     # Implication: Switch polarity
     elif formula.decl().name() == "=>":
         # Switch polarity just for the left part of implication
         polarity2 = Polarity(not polarity.value)
-        """
-        if polarity == Polarity.POSITIVE:
-            polarity2 = Polarity.NEGATIVE
-        else:
-            polarity2 = Polarity.POSITIVE
-        """
 
         new_children.append(rec_go(formula.children()[0],
                                    var_list_copy,
@@ -268,7 +187,7 @@ def complexform_process(formula, var_list, approx_type,
                                    q_type,
                                    bit_places,
                                    polarity))
-        return Implies(*new_children)
+        return z3.Implies(*new_children)
 
     # Recursively process children of the formula
     for i in range(len(formula.children())):
@@ -281,10 +200,10 @@ def complexform_process(formula, var_list, approx_type,
 
     # Recreate trouble making operands with arity greater then 2
     if formula.decl().name() == "and":
-        formula = And(*new_children)
+        formula = z3.And(*new_children)
 
     elif formula.decl().name() == "or":
-        formula = Or(*new_children)
+        formula = z3.Or(*new_children)
 
     elif formula.decl().name() == "bvadd":
         formula = new_children[0]
@@ -317,7 +236,7 @@ def rec_go(formula, var_list, approx_type, q_type, bit_places, polarity):
         order = - z3.get_var_index(formula) - 1
 
         # Approximate if var is bit-vecotr and is quantified in the right way
-        if (type(formula) == BitVecRef) and (var_list[order][1] == q_type):
+        if (type(formula) == z3.BitVecRef) and (var_list[order][1] == q_type):
             # Update max bit-vector width
             global max_bit_width
             if max_bit_width < formula.size():
@@ -325,7 +244,7 @@ def rec_go(formula, var_list, approx_type, q_type, bit_places, polarity):
             formula = approximate(formula, approx_type, bit_places)
 
     # Quantified formula
-    elif type(formula) == QuantifierRef:
+    elif type(formula) == z3.QuantifierRef:
         formula = qform_process(formula,
                                 list(var_list),
                                 approx_type,
@@ -335,9 +254,8 @@ def rec_go(formula, var_list, approx_type, q_type, bit_places, polarity):
 
     # Complex formula
     else:
-        var_list_copy = list(var_list)
         formula = complexform_process(formula,
-                                      var_list_copy,
+                                      list(var_list),
                                       approx_type,
                                       q_type,
                                       bit_places,
@@ -386,15 +304,15 @@ def solve_with_approximations(formula, approx_type, q_type,
         # Over-approximation of the formula is SAT or the result is unknown.
         # Approximation continues.
         # print("O", result, end=" ") # DEBUG
-        if (result == CheckSatResult(Z3_L_TRUE) or
-                result == CheckSatResult(Z3_L_UNDEF)):
+        if (result == z3.CheckSatResult(z3.Z3_L_TRUE) or
+                result == z3.CheckSatResult(z3.Z3_L_UNDEF)):
 
             result = continue_with_approximation(formula, approx_type, q_type,
                                                  bit_places, polarity,
                                                  result_queue)
         # Over-approximation of the formula is UNSAT.
         # Original formula is UNSAT.
-        elif result == CheckSatResult(Z3_L_FALSE):
+        elif result == z3.CheckSatResult(z3.Z3_L_FALSE):
             pass
         # Invalid result
         else:
@@ -403,14 +321,14 @@ def solve_with_approximations(formula, approx_type, q_type,
     else:
         # print("U", result, end=" ") # DEBUG
         # Under-approximation of the formula is SAT. Original formula is SAT.
-        if result == CheckSatResult(Z3_L_TRUE):
+        if result == z3.CheckSatResult(z3.Z3_L_TRUE):
             # print("U: The model follows:")    # DEBUG
             # z3.solve(approximated_formula)    # DEBUG
             pass
         # Under-approximation of the formula is UNSAT or the result is unknown.
         # Approximation continues.
-        elif (result == CheckSatResult(Z3_L_FALSE) or
-              result == CheckSatResult(Z3_L_UNDEF)):
+        elif (result == z3.CheckSatResult(z3.Z3_L_FALSE) or
+              result == z3.CheckSatResult(z3.Z3_L_UNDEF)):
             result = continue_with_approximation(formula, approx_type, q_type,
                                                  bit_places, polarity,
                                                  result_queue)
