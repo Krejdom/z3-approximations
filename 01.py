@@ -304,7 +304,9 @@ def complexform_process(formula, var_list, approx_type,
     return formula
 
 
-def rec_go_f(formula, var_list, approx_type, q_type, bit_places, polarity):
+def rec_go(formula, var_list, approx_type, q_type, bit_places, polarity):
+    """Recursively go through the formula and apply approximations.
+    """
     # Constant
     if z3.is_const(formula):
         pass
@@ -322,6 +324,15 @@ def rec_go_f(formula, var_list, approx_type, q_type, bit_places, polarity):
                 max_bit_width = formula.size()
             formula = approximate(formula, approx_type, bit_places)
 
+    # Quantified formula
+    elif type(formula) == QuantifierRef:
+        formula = qform_process(formula,
+                                list(var_list),
+                                approx_type,
+                                q_type,
+                                bit_places,
+                                polarity)
+
     # Complex formula
     else:
         var_list_copy = list(var_list)
@@ -331,30 +342,6 @@ def rec_go_f(formula, var_list, approx_type, q_type, bit_places, polarity):
                                       q_type,
                                       bit_places,
                                       polarity)
-
-    return formula
-
-
-def rec_go(formula, var_list, approx_type, q_type, bit_places, polarity):
-    """Recursively go through the formula and apply approximations.
-    """
-    # Quantified formula
-    if type(formula) == QuantifierRef:
-        formula = qform_process(formula,
-                                list(var_list),
-                                approx_type,
-                                q_type,
-                                bit_places,
-                                polarity)
-
-    # Ordinary formula
-    else:
-        formula = rec_go_f(formula,
-                           list(var_list),
-                           approx_type,
-                           q_type,
-                           bit_places,
-                           polarity)
 
     return formula
 
