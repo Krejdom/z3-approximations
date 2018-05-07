@@ -5,7 +5,6 @@ import argparse
 from enum import Enum
 import multiprocessing
 import sys
-import time
 
 import z3
 
@@ -369,7 +368,6 @@ def main():
     else:
         reduction_type = ReductionType.ZERO_EXTENSION
 
-    print(reduction_type)
     # File with .smt2 formula
     formula_file = args.formula
 
@@ -420,7 +418,6 @@ def main():
             p1.terminate()
             p2.terminate()
 
-    print(result)
     return result
 
 

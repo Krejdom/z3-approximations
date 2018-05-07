@@ -12,10 +12,6 @@ from reduction_types import zero_extension, right_zero_extension
 from reduction_types import one_extension, right_one_extension
 from reduction_types import sign_extension, right_sign_extension
 
-# Prevent RecursionError
-# DEBUG maybe delete it, after incorporating sequential improvement
-sys.setrecursionlimit(2000)
-
 
 class Quantification(Enum):
     """Determine which variables (universaly or existentialy quantified)
@@ -39,7 +35,7 @@ class ReductionType(Enum):
     RIGHT_SIGN_EXTENSION = -2
 
 
-max_bit_width = 1
+max_bit_width = 0
 
 
 def approximate(formula, approx_type, bit_places):
@@ -235,13 +231,16 @@ def rec_go(formula, var_list, approx_type, q_type, bit_places, polarity):
         # order = len(var_list) - z3.get_var_index(formula) - 1  # orginal debug
         order = - z3.get_var_index(formula) - 1
 
-        # Approximate if var is bit-vecotr and is quantified in the right way
-        if (type(formula) == z3.BitVecRef) and (var_list[order][1] == q_type):
+        # Process if it is bit-vector variable
+        if type(formula) == z3.BitVecRef:
             # Update max bit-vector width
             global max_bit_width
             if max_bit_width < formula.size():
                 max_bit_width = formula.size()
-            formula = approximate(formula, approx_type, bit_places)
+
+            # Approximate if var is bit-vecotr and is quantified in the right way
+            if var_list[order][1] == q_type:
+                formula = approximate(formula, approx_type, bit_places)
 
     # Quantified formula
     elif type(formula) == z3.QuantifierRef:
@@ -264,80 +263,77 @@ def rec_go(formula, var_list, approx_type, q_type, bit_places, polarity):
     return formula
 
 
-def continue_with_approximation(formula, approx_type, q_type, bit_places,
-                                polarity, result_queue):
-    # Do not approximate if maximal bit width is reached.
-    if bit_places < (max_bit_width - 2):
-        # Switch left/right approximation
-        approx_type = ReductionType(- approx_type.value)
-        if approx_type.value < 0:
-            # Resize bit width
-            if bit_places == 1:
-                bit_places += 1
-            else:
-                bit_places += 2
-
-        return solve_with_approximations(formula,
-                                         approx_type,
-                                         q_type,
-                                         bit_places,
-                                         polarity,
-                                         result_queue)
-    else:
-        return solve_without_approximations(formula, result_queue)
-
-
 def solve_with_approximations(formula, approx_type, q_type,
                               bit_places, polarity, result_queue):
-    s = z3.Solver()
-    approximated_formula = rec_go(formula,
-                                  [],
-                                  approx_type,
-                                  q_type,
-                                  bit_places,
-                                  polarity)
+    # Initialize result - unknown
+    result = z3.CheckSatResult(z3.Z3_L_UNDEF)
 
-    s.add(approximated_formula)
-    result = s.check()
+    # Approximate until maximal bit width is reached.
+    while (bit_places < (max_bit_width - 2) or
+           max_bit_width == 0):
 
-    if q_type == Quantification.UNIVERSAL:
+        # approximate
+        approximated_formula = rec_go(formula,
+                                      [],
+                                      approx_type,
+                                      q_type,
+                                      bit_places,
+                                      polarity)
+
+        # solve
+        s = z3.Solver()
+        s.add(approximated_formula)
+        result = s.check()
+
+        if q_type == Quantification.UNIVERSAL:
         # Over-approximation of the formula is SAT or the result is unknown.
         # Approximation continues.
-        # print("O", result, end=" ") # DEBUG
-        if (result == z3.CheckSatResult(z3.Z3_L_TRUE) or
+            if (result == z3.CheckSatResult(z3.Z3_L_TRUE) or
                 result == z3.CheckSatResult(z3.Z3_L_UNDEF)):
 
-            result = continue_with_approximation(formula, approx_type, q_type,
-                                                 bit_places, polarity,
-                                                 result_queue)
-        # Over-approximation of the formula is UNSAT.
-        # Original formula is UNSAT.
-        elif result == z3.CheckSatResult(z3.Z3_L_FALSE):
-            pass
-        # Invalid result
-        else:
-            raise ValueError("Invalid result was given.")
+                # Switch left/right approximation
+                approx_type = ReductionType(- approx_type.value)
+                if approx_type.value < 0:
+                    # Resize bit width
+                    if bit_places == 1:
+                        bit_places += 1
+                    else:
+                        bit_places += 2
 
-    else:
-        # print("U", result, end=" ") # DEBUG
-        # Under-approximation of the formula is SAT. Original formula is SAT.
-        if result == z3.CheckSatResult(z3.Z3_L_TRUE):
-            # print("U: The model follows:")    # DEBUG
-            # z3.solve(approximated_formula)    # DEBUG
-            pass
-        # Under-approximation of the formula is UNSAT or the result is unknown.
-        # Approximation continues.
-        elif (result == z3.CheckSatResult(z3.Z3_L_FALSE) or
-              result == z3.CheckSatResult(z3.Z3_L_UNDEF)):
-            result = continue_with_approximation(formula, approx_type, q_type,
-                                                 bit_places, polarity,
-                                                 result_queue)
-        # Invalid result
-        else:
-            raise ValueError("Invalid result was given.")
+            # Over-approximation of the formula is UNSAT.
+            # Original formula is UNSAT.
+            elif result == z3.CheckSatResult(z3.Z3_L_FALSE):
+                result_queue.put(result)
+                return result
 
-    result_queue.put(result)
-    return result
+            # Invalid result
+            else:
+                raise ValueError("Invalid result was given.")
+
+        else:
+            # Under-approximation of the formula is SAT. Original formula is SAT.
+            if result == z3.CheckSatResult(z3.Z3_L_TRUE):
+                result_queue.put(result)
+                return result
+
+            # Under-approximation of the formula is UNSAT or the result is unknown.
+            # Approximation continues.
+            elif (result == z3.CheckSatResult(z3.Z3_L_FALSE) or
+                  result == z3.CheckSatResult(z3.Z3_L_UNDEF)):
+
+                # Switch left/right approximation
+                approx_type = ReductionType(- approx_type.value)
+                if approx_type.value < 0:
+                    # Resize bit width
+                    if bit_places == 1:
+                        bit_places += 1
+                    else:
+                        bit_places += 2
+
+            # Invalid result
+            else:
+                raise ValueError("Invalid result was given.")
+    return solve_without_approximations(formula, result_queue)
 
 
 def solve_without_approximations(formula, result_queue):
