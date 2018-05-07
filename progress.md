@@ -193,7 +193,7 @@ ze stránky:
 - TOOD: Ověřit, že rekurze vrátí správný výsledek do result.
 - done: Není náhodou De Morgan Tvrzení?
 - Na tabulky je dobré používat balíček booktabs. (Martin)
-- TODO: Citace nejen číslem.
+- done: Citace nejen číslem.
 - TODO: Dopsat Strejdu do poděkování za to, že mi pověděl chytrou věc. (wall time vs. CPU time, nástroje: Cgroups, Banchexec?)
 
 # 17/04/2018
@@ -206,4 +206,8 @@ ze stránky:
 # 23/04/2018
 - Asi jsem objevila podstatnou chybu. Měla jsem přehozené menšítko v podmínce o aproximacích. Všechny dosavadní výsledky jsou tedy pravděpodobně nerelevantní.
 - Kreslím si schéma funkcí a rozkládám ty velké na menší.
+
+# 07/05/2018
+- Vytvářím soubor s pracovním názvem 02.py, který má být hotovým prográmkem, který přiložím k bakalářce. Tz. že bude rozhodovat vždy jen jeden soubor s formulí a bude poustět paralelně jak aproximace, tak i originál. Nad tím potom musím postavit skript, který pustí 02 a jen výpočet originálu.
+- Předělala jsem tam i drobně paralelismus, kterej byl nějakej čudnej. Podle tohoto: https://stackoverflow.com/questions/48677978/python-run-multiple-get-requests-in-parallel-and-stop-on-first-response
 
