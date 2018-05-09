@@ -12,10 +12,6 @@ from reduction_types import zero_extension, right_zero_extension
 from reduction_types import one_extension, right_one_extension
 from reduction_types import sign_extension, right_sign_extension
 
-# Prevent RecursionError
-# DEBUG maybe delete it, after incorporating sequential improvement
-sys.setrecursionlimit(2000)
-
 
 class Quantification(Enum):
     """Determine which variables (universaly or existentialy quantified)
@@ -213,12 +209,6 @@ def complexform_process(formula, var_list, reduction_type,
         for ch in new_children[1::]:
             formula = formula + ch
 
-    # TODO: bvmul   # debug - delete if never happend
-    # problems with Distinct() or multiplication may arrise
-    # print(formula.decl().name())
-    elif (formula.decl().name() == "bvmul") and (len(new_children) > 2):
-        raise ValueError("Fix needed (TODO: bvmul)")
-
     # Recreate problem-free operands
     else:
         formula = formula.decl().__call__(*new_children)
@@ -414,10 +404,11 @@ def main():
             result = z3.CheckSatResult(z3.Z3_L_UNDEF)
 
         # Terminate all
-            p0.terminate()
-            p1.terminate()
-            p2.terminate()
+        p0.terminate()
+        p1.terminate()
+        p2.terminate()
 
+    #print(result)
     return result
 
 
