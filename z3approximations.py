@@ -408,7 +408,7 @@ def main():
         p1.terminate()
         p2.terminate()
 
-    #print(result)
+    print(result)
     return result
 
 

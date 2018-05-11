@@ -211,3 +211,16 @@ ze stránky:
 - Vytvářím soubor s pracovním názvem 02.py, který má být hotovým prográmkem, který přiložím k bakalářce. Tz. že bude rozhodovat vždy jen jeden soubor s formulí a bude poustět paralelně jak aproximace, tak i originál. Nad tím potom musím postavit skript, který pustí 02 a jen výpočet originálu.
 - Předělala jsem tam i drobně paralelismus, kterej byl nějakej čudnej. Podle tohoto: https://stackoverflow.com/questions/48677978/python-run-multiple-get-requests-in-parallel-and-stop-on-first-response
 
+# 09/05/2018
+- Mám asi hotovou finální verzi implementace.
+- Odstranila jsem hloupou chybu s odsazením, kvůli které se mi procesy neukončovaly.
+- Píšu text! :)
+- Běží mi benchmarky, které zjišťují čas výpočtu aproximace.
+- TODO: Dopsat docstringy podle papíru
+- TODO: Zmenšit fci solve_with...
+- TODO: Graf co se nesolvlo (bude to srovnatelnější)
+- TODO: tabulky s výsledky
+- TODO: graf na časy výpočtu
+- TODO: posunout Sko dolů
+- TODO: vybrat jednotnou barvu (ideálně i k šatům a prezentaci)
+- TODO: Vytvořit readme
