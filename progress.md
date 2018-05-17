@@ -110,15 +110,15 @@ ze stránky:
 4 Experimentální vyhodnocení
 5 Závěr
 
-- TODO: vylepšení: neopakovat část s přepínáním polarity
+- done: vylepšení: neopakovat část s přepínáním polarity
 - SOLVED: Násleudující benchmark vrací unknown-unknown, když ho pustím samotnej, když ho pustím mezi více, tak vrací unknown-result:
     ../BV_benchmarky/20170501-Heizmann-UltimateAutomizer/jain_1_true-unreach-call_true-no-overflow.i_56.smt2
-- TODO: Měla bych zjistit, jestli někdy projde aproximace, když timeoutne originální formule.
+- done: Měla bych zjistit, jestli někdy projde aproximace, když timeoutne originální formule.
 
 # 20/3/2018
 - Něco spadlo:
     z3.z3types.Z3Exception: b'out of memory'
-- TODO: Vyčistit kód od debugů a starých poznámek.
+- done: Vyčistit kód od debugů a starých poznámek.
 - Snažím se teď řešit situaci kdy je aproximace undef a originál je sat/unsat, nastává to třeba u formule: ../BV_benchmarky/20170501-Heizmann-UltimateAutomizer/jain_1_true-unreach-call_true-no-overflow.i_408.smt2 --> budu to prostě dál aproximovat, když aproximace vyjde unknown, stejně, jako by to vyšlo nějak určitě
 - Problém v nedeterminičnosti bude pravděpodobně v tom, že na výsledek používám stejnou frontu!!
 
@@ -134,7 +134,7 @@ ze stránky:
 - z3.z3types.Z3Exception: b'bit-vector size must be greater than zero' po ../BV_benchmarky/wintersteiger/fmsd13/ranking/filesys_smbmrx_midatlas.c.smt2
 
 # 26/03/2018
-- TODO na tento týden:
+- Na tento týden:
     1. DONE Měřit, jak dlouho trvá rozhodnutí formule (originál vs. aproximace)
     2. DONE Zjistit, za jak dlouho timeoutují aproximace (nesčítá se to náhodou? to by vysvětlovalo to, že tam teď nejsou vykřičníky, jak jsem to předělala)
     3. Sepsat část k polaritě.
@@ -183,7 +183,7 @@ ze stránky:
 
 # 04/04/2018
 - Překopala jsem fci `qform_process` a implementovala "sekvenční zkratku". Odstranila jsem i zvýšení limitu rekurze a běží to jak na drátkách (aspoň na tom jednom benchmarku, kde to předtím padalo, jdu to zkusit i na další.
-- TODO: `qform_process` rozložit fci na víc menších. Logicky pojmenovat. To by chtělo asi u všech fcí. O:)
+- done: `qform_process` rozložit fci na víc menších. Logicky pojmenovat. To by chtělo asi u všech fcí. O:)
 - Tak na té rekurzi to padá pořád, ale sice to vyhodí chybu, ale výsledek to normálně vrátí.
 
 # 05/04/2018
@@ -194,7 +194,7 @@ ze stránky:
 - done: Není náhodou De Morgan Tvrzení?
 - Na tabulky je dobré používat balíček booktabs. (Martin)
 - done: Citace nejen číslem.
-- TODO: Dopsat Strejdu do poděkování za to, že mi pověděl chytrou věc. (wall time vs. CPU time, nástroje: Cgroups, Banchexec?)
+- done: Dopsat Strejdu do poděkování za to, že mi pověděl chytrou věc. (wall time vs. CPU time, nástroje: Cgroups, Banchexec?)
 
 # 17/04/2018
 - Píšu a píšu.
@@ -219,8 +219,37 @@ ze stránky:
 - TODO: Dopsat docstringy podle papíru
 - TODO: Zmenšit fci solve_with...
 - TODO: Graf co se nesolvlo (bude to srovnatelnější)
-- TODO: tabulky s výsledky
+- done: tabulky s výsledky
 - TODO: graf na časy výpočtu
-- TODO: posunout Sko dolů
+- done: posunout Sko dolů
 - TODO: vybrat jednotnou barvu (ideálně i k šatům a prezentaci)
 - TODO: Vytvořit readme
+- TODO: Zkontrolovat sumy benchmarků
+
+# 12/05/2018
+- Zeptat se Martina, co je to netriviální teorie (viz podkapitola o SMT).
+- Zeptat se Martina na další solvery: https://en.wikipedia.org/wiki/Satisfiability_modulo_theories a taky na to, proč tam není Q3B.
+- Zeptat se Martina na jedničkové rozšíření a pravé jedničkové rozšíření (to jsem totiž implementovala taky). - zkusím
+- Co je to neinterpretovaná konstanta? - nekvantifikovaná proměnná
+
+# 14/05/2018
+- Rozpsat operace v teorii bv.
+- Aplikace (bit-vektorových, Heňo používá) SMT solverů.
+- Splnitelnost více rozepsat.
+- Predikátová logika, výroková logika - termy, formule, model (Z3 nedá model), teorie.
+- equisatisfable formule (aprox. není ekvivalentní), co je ekvivalentní
+- SMT sovlery, od kdy podporují bv, jak se jim daří (SMT comp).
+- Příklady.
+- vývojový diagram na vyhodnocení aproximace (aproximuju dál nebo ne).
+- graf co se nesolvlo splácnout po H, P a W. :)
+- Graf viz článek.
+- Korelační diagram (https://upload.wikimedia.org/wikipedia/commons/thumb/0/0f/Oldfaithful3.png/240px-Oldfaithful3.png), jedna osa s aproximací, jedna bez aproximace, různé barvy pro sat/unsat.
+- Kdybych se nudila, tak modely z over-a.
+
+# 15/05/2018
+- Kamarádi z Formely jsou zlatíčka!
+    runexec -- python3 z3approximations.py ../BV_benchmarky/vlastni/forfor.smt2 2>&1 | grep cputime=
+
+# 17/05/2018
+- https://tex.stackexchange.com/questions/191709/biblatex-biber-babel-configuration-for-polish-language-and-style-of-bibliog -- řešení problému s In:
+

@@ -158,8 +158,8 @@ def qform_process(formula, var_list, reduction_type,
     return formula
 
 
-def complexform_process(formula, var_list, reduction_type,
-                        q_type, bit_places, polarity):
+def cform_process(formula, var_list, reduction_type, q_type, bit_places,
+                  polarity):
     """Process individual parts of a compound formula and recreate the formula.
     """
     new_children = []
@@ -249,12 +249,12 @@ def rec_go(formula, var_list, reduction_type, q_type, bit_places, polarity):
 
     # Complex formula
     else:
-        formula = complexform_process(formula,
-                                      list(var_list),
-                                      reduction_type,
-                                      q_type,
-                                      bit_places,
-                                      polarity)
+        formula = cform_process(formula,
+                                list(var_list),
+                                reduction_type,
+                                q_type,
+                                bit_places,
+                                polarity)
 
     return formula
 
@@ -275,8 +275,8 @@ def next_approx(reduction_type, bit_places):
     return (reduction_type, bit_places)
 
 
-def solve_with_approximations(formula, reduction_type, q_type,
-                              bit_places, polarity, result_queue):
+def solve_with_approx(formula, reduction_type, q_type, bit_places, polarity,
+                      result_queue):
     """Recursively go through `formula` and approximate it. Check
     satisfiability of the approximated formula. Put the result to
     the `result_queue`.
@@ -331,10 +331,10 @@ def solve_with_approximations(formula, reduction_type, q_type,
                 (reduction_type, bit_places) = next_approx(reduction_type,
                                                            bit_places)
 
-    solve_without_approximations(formula, result_queue)
+    solve_without_approx(formula, result_queue)
 
 
-def solve_without_approximations(formula, result_queue):
+def solve_without_approx(formula, result_queue):
     """Solve the given formula without any preprocessing.
     """
     s = z3.Solver()
@@ -369,11 +369,11 @@ def main():
         result_queue = multiprocessing.Queue()
 
         # ORIGINAL FORMULA: Create process
-        p0 = multiprocessing.Process(target=solve_without_approximations,
+        p0 = multiprocessing.Process(target=solve_without_approx,
                                      args=(formula, result_queue))
 
         # APPROXIMATED FORMULA - Over-approximation: Create process
-        p1 = multiprocessing.Process(target=solve_with_approximations,
+        p1 = multiprocessing.Process(target=solve_with_approx,
                                      args=(formula,
                                            reduction_type,
                                            Quantification.UNIVERSAL,
@@ -382,7 +382,7 @@ def main():
                                            result_queue))
 
         # APPROXIMATED FORMULA - Under-approximation: Create process
-        p2 = multiprocessing.Process(target=solve_with_approximations,
+        p2 = multiprocessing.Process(target=solve_with_approx,
                                      args=(formula,
                                            reduction_type,
                                            Quantification.EXISTENTIAL,
@@ -398,7 +398,7 @@ def main():
         # Get result
         try:
             # Wait at most 60 seconds for a return
-            result = result_queue.get(timeout=60)
+            result = result_queue.get(timeout=300)
         except multiprocessing.queues.Empty:
             # If queue is empty, set result to undef
             result = z3.CheckSatResult(z3.Z3_L_UNDEF)
